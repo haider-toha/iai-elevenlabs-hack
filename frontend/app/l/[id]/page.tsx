@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 
 import { ConvaiLeaf } from "@/components/convai-leaf";
+import { Wordmark } from "@/components/wordmark";
 import type { Letter } from "@/lib/api";
 import { getLetter } from "@/lib/api";
 import { env } from "@/lib/env";
@@ -57,9 +58,12 @@ export default async function ConversationPage({
         </section>
       </div>
 
-      <footer className="mt-16 border-t border-rule pt-4 text-xs leading-relaxed text-ink-faint">
-        Contains public sector information licensed under the Open Government
-        Licence v3.0. This explains your letter — it is not formal tax advice.
+      <footer className="mt-16 border-t border-rule pt-4">
+        <Wordmark size="sm" />
+        <p className="mt-3 text-xs leading-relaxed text-ink-faint">
+          Contains public sector information licensed under the Open Government
+          Licence v3.0. This explains your letter — it is not formal tax advice.
+        </p>
       </footer>
     </main>
   );

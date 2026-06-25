@@ -1,10 +1,12 @@
 import type { Letter, P2Letter } from "@/lib/api";
 
-// Pounds, no pence on whole amounts (HMRC coding notices show whole pounds).
+// Pounds, no pence on whole amounts, and no thousands separator — HMRC coding
+// notices print whole pounds as a bare run of digits (e.g. "£10600", "£18044").
 const gbp = new Intl.NumberFormat("en-GB", {
   style: "currency",
   currency: "GBP",
   maximumFractionDigits: 0,
+  useGrouping: false,
 });
 
 export function poundsSigned(amount: number): string {
@@ -16,10 +18,9 @@ export function pounds(amount: number): string {
   return gbp.format(Math.abs(amount));
 }
 
-// "2026-04-06" → "6 April 2026". The backend sends an ISO date string.
-export function longDate(iso: string): string {
+// "2026-01-06" → "January 2026". HMRC P2 notices are dated by month, not day.
+export function monthYear(iso: string): string {
   return new Date(`${iso}T00:00:00`).toLocaleDateString("en-GB", {
-    day: "numeric",
     month: "long",
     year: "numeric",
   });

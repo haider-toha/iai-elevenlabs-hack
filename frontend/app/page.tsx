@@ -1,12 +1,12 @@
 import Link from "next/link";
 
+import { Wordmark } from "@/components/wordmark";
+
 export default function Home() {
   return (
     <main className="mx-auto max-w-5xl px-6 py-16 sm:px-10 sm:py-24">
-      <header className="flex items-baseline justify-between border-b border-rule-strong pb-3">
-        <span className="font-display text-sm font-medium uppercase tracking-[0.18em] text-ink-muted">
-          HM Revenue &amp; Customs · Letter Explainer
-        </span>
+      <header className="flex items-center justify-between border-b border-rule-strong pb-3">
+        <Wordmark />
         <span className="tnum font-display text-sm uppercase tracking-[0.18em] text-ink-faint">
           Prototype — {new Date().getUTCFullYear()}
         </span>

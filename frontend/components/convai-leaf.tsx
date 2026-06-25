@@ -42,15 +42,18 @@ const WELSH_FIRST_MESSAGE =
 const ENGLISH_FIRST_MESSAGE =
   "Hi, I can see you've got a tax code notice from HMRC. What would you like to know?";
 
-// One audio chunk's worth of character timings, plus the wall-clock moment it
-// arrived. The karaoke highlight compares elapsed time against these to advance
-// a "spoken" cursor through the live caption.
-type AlignmentSegment = {
-  chars: string[];
-  charStartTimesMs: number[];
-  charDurationsMs: number[];
-  receivedAt: number;
+// A growing per-character timeline: for each char of the agent's current
+// response, the absolute wall-clock time (performance.now() ms) at which it
+// should be voiced. Each `audio_alignment` event appends one chunk's chars,
+// converting its relative `char_start_times_ms` into absolute timestamps by
+// anchoring to the moment that chunk arrived.
+type RevealTimeline = {
+  spokenAtMs: number[];
 };
+
+// Small lead so a word appears just before the voice hits it, instead of
+// trailing behind. Keeps the reveal feeling "live" without spoiling phrases.
+const REVEAL_LEAD_MS = 120;
 
 // v1.8.0 is provider-based: the provider holds the session machinery and the
 // inner component drives it through the conversation hooks. The provider must
@@ -72,14 +75,15 @@ function ConvaiSession({
 }: LeafProps) {
   const [transcript, setTranscript] = useState<Turn[]>([]);
   const [agentLive, setAgentLive] = useState("");
-  const [spokenCount, setSpokenCount] = useState(0);
+  const [revealedCount, setRevealedCount] = useState(0);
   const [language, setLanguage] = useState<Language>("en");
   const [error, setError] = useState<string | null>(null);
   const [agentHasReplied, setAgentHasReplied] = useState(false);
 
-  // The latest audio chunk's alignment and its arrival time. A ref (not state)
-  // because the highlight interval reads it every ~50ms without re-rendering.
-  const alignment = useRef<AlignmentSegment | null>(null);
+  // Absolute spoken-at timestamps per char of the *current* agent response.
+  // A ref (not state) because the reveal interval mutates it on every audio
+  // chunk and reads it every ~30ms without needing to re-render the tree.
+  const timeline = useRef<RevealTimeline>({ spokenAtMs: [] });
 
   // v1.8.0's convenience hook: it both reads status / exposes the session
   // controls AND registers these callbacks with the provider via a latest-
@@ -95,25 +99,33 @@ function ConvaiSession({
       }
     },
     onAgentChatResponsePart: (part) => {
-      // part: { text, type: "start" | "delta" | "stop", event_id }
+      // part: { text, type: "start" | "delta" | "stop", event_id }.
+      // We accumulate the *target* text from deltas but gate visibility on the
+      // audio timeline below — so the user sees text appear in step with the
+      // voice, not in jumpy LLM chunks.
       if (part.type === "start") {
         setAgentLive("");
-        setSpokenCount(0);
+        setRevealedCount(0);
+        timeline.current = { spokenAtMs: [] };
       } else if (part.type === "delta") {
         setAgentLive((s) => s + part.text);
       } else if (part.type === "stop") {
         setAgentLive("");
-        setSpokenCount(0);
+        setRevealedCount(0);
+        timeline.current = { spokenAtMs: [] };
       }
     },
     onAudioAlignment: (a) => {
-      // Field names are snake_case on the wire (AudioEventAlignment).
-      alignment.current = {
-        chars: a.chars,
-        charStartTimesMs: a.char_start_times_ms,
-        charDurationsMs: a.char_durations_ms,
-        receivedAt: performance.now(),
-      };
+      // Field names are snake_case on the wire (AudioEventAlignment). Convert
+      // each char's chunk-relative start into an absolute performance.now() ms
+      // and append to the cumulative timeline. The reveal interval below
+      // walks this timeline to drive `revealedCount`.
+      const anchor = performance.now();
+      const next = timeline.current.spokenAtMs.slice();
+      for (let i = 0; i < a.chars.length; i++) {
+        next.push(anchor + (a.char_start_times_ms[i] ?? 0));
+      }
+      timeline.current = { spokenAtMs: next };
     },
     // onError(message, context) — the first arg is the message string, not an
     // Error object. Surface it inline rather than logging to a console nobody
@@ -122,30 +134,26 @@ function ConvaiSession({
     onStatusChange: ({ status }) => {
       if (status === "disconnected") {
         setAgentLive("");
-        setSpokenCount(0);
+        setRevealedCount(0);
+        timeline.current = { spokenAtMs: [] };
       }
     },
   });
   const live = status === "connected" || status === "connecting";
 
-  // Karaoke highlight: every ~50ms, find how many characters of the current
-  // audio chunk have elapsed and reflect that as the spoken-prefix length of
-  // the live caption.
+  // Audio-paced reveal: ~30ms tick (≈animation frame cadence) walks the
+  // cumulative spoken-at timeline and advances `revealedCount` to the last
+  // char whose voiced moment has passed (+ a small lead so words appear just
+  // before the audio hits them rather than chasing it).
   useEffect(() => {
     if (status !== "connected") return;
     const tick = window.setInterval(() => {
-      const seg = alignment.current;
-      if (seg === null || seg.chars.length === 0) return;
-      const elapsed = performance.now() - seg.receivedAt;
-      let spoken = 0;
-      for (let i = 0; i < seg.chars.length; i++) {
-        const start = seg.charStartTimesMs[i] ?? 0;
-        const dur = seg.charDurationsMs[i] ?? 0;
-        if (elapsed >= start + dur) spoken = i + 1;
-        else break;
-      }
-      setSpokenCount(spoken);
-    }, 50);
+      const now = performance.now() + REVEAL_LEAD_MS;
+      const timestamps = timeline.current.spokenAtMs;
+      let i = 0;
+      while (i < timestamps.length && timestamps[i]! <= now) i++;
+      setRevealedCount((prev) => (i > prev ? i : prev));
+    }, 30);
     return () => window.clearInterval(tick);
   }, [status]);
 
@@ -278,7 +286,7 @@ function ConvaiSession({
       <TranscriptPanel
         items={transcript}
         live={agentLive}
-        spokenCount={spokenCount}
+        revealedCount={revealedCount}
       />
 
       {agentHasReplied && sources.length > 0 ? (
@@ -301,13 +309,17 @@ function ConvaiSession({
 function TranscriptPanel({
   items,
   live,
-  spokenCount,
+  revealedCount,
 }: {
   items: Turn[];
   live: string;
-  spokenCount: number;
+  revealedCount: number;
 }) {
-  const empty = items.length === 0 && live === "";
+  // Reveal only what's been (or is about to be) voiced. If `live` has grown
+  // past the timeline because text deltas outran audio synthesis, the tail
+  // stays hidden until the audio catches up — matching dictation cadence.
+  const visible = live.slice(0, Math.min(revealedCount, live.length));
+  const empty = items.length === 0 && visible === "";
   return (
     <div className="min-h-40 border-t border-rule-strong pt-4">
       <p className="font-display text-[0.7rem] uppercase tracking-[0.16em] text-ink-faint">
@@ -332,10 +344,14 @@ function TranscriptPanel({
               {turn.text}
             </p>
           ))}
-          {live !== "" ? (
-            <p className="max-w-[44ch] self-end text-right text-base text-accent">
-              <span className="text-ink">{live.slice(0, spokenCount)}</span>
-              {live.slice(spokenCount)}
+          {visible !== "" ? (
+            <p className="max-w-[44ch] self-end text-right text-base text-ink">
+              {visible}
+              <span
+                aria-hidden
+                className="ml-0.5 inline-block w-[0.4ch] animate-pulse bg-accent align-baseline"
+                style={{ height: "1em" }}
+              />
             </p>
           ) : null}
         </div>

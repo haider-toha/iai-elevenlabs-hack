@@ -8,7 +8,7 @@ class Settings(BaseSettings):
         env_file=".env", env_file_encoding="utf-8", extra="ignore"
     )
 
-    app_name: str = "hackathon-backend"
+    app_name: str = "Marginalia"
     debug: bool = False
     cors_origins: list[str] = ["http://localhost:3000"]
     database_url: str = "postgresql://postgres:postgres@127.0.0.1:54322/postgres"

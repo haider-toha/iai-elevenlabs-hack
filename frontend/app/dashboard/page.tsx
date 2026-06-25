@@ -1,4 +1,4 @@
-import Link from "next/link";
+import { Wordmark } from "@/components/wordmark";
 
 import { getScanEventDashboard } from "@/lib/api";
 import type { LanguageCount, ScanEventAggregate } from "@/lib/api";
@@ -63,16 +63,11 @@ export default async function DashboardPage() {
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-16 sm:px-10 sm:py-24">
-      <header className="flex items-baseline justify-between border-b border-rule-strong pb-3">
-        <span className="font-display text-sm font-medium uppercase tracking-[0.18em] text-ink-muted">
+      <header className="flex items-center justify-between border-b border-rule-strong pb-3">
+        <Wordmark size="sm" />
+        <span className="font-display text-sm uppercase tracking-[0.18em] text-ink-faint">
           Confusion heatmap
         </span>
-        <Link
-          href="/"
-          className="font-display text-sm uppercase tracking-[0.18em] text-ink-faint transition-opacity duration-150 ease-out hover:opacity-70"
-        >
-          Index
-        </Link>
       </header>
 
       <section className="grid gap-x-12 gap-y-10 pt-14 md:grid-cols-12">

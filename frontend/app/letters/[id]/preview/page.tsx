@@ -1,14 +1,29 @@
+import Image from "next/image";
 import { notFound } from "next/navigation";
 
 import type { P2Letter, P800Letter } from "@/lib/api";
 import { getLetter } from "@/lib/api";
 import { env } from "@/lib/env";
-import { longDate, pounds, poundsSigned } from "@/lib/letter-format";
+import { monthYear, pounds, poundsSigned } from "@/lib/letter-format";
 
-// The rendered letter must read as the genuine article. Every literal HMRC
-// string below is traceable to backend/data/letter-samples/p2-verbatim-strings.md;
-// only the per-letter fields (name, code, amounts, lines, confusing_line) come
-// from the fetched model.
+// This page is a deliberate exception to the app's editorial design system: it
+// must read as a scanned government letter — white paper, black ink, a system
+// sans, a dense near-full-width measure, no colour. The Arial stack is set on
+// the <article> so every descendant inherits it; the one <h1> repeats it inline
+// (and resets tracking) because globals.css sets a display font + negative
+// letter-spacing on h1–h4 directly, which an inherited font can't override.
+const SANS = 'Arial, "Helvetica Neue", Helvetica, sans-serif';
+
+// from: p2-verbatim-strings.md — the HMRC PAYE return address, as printed.
+const RETURN_ADDRESS = [
+  "HM Revenue & Customs",
+  "PAYE AS YOU EARN",
+  "HM REVENUE AND CUSTOMS",
+  "BX9 1AS",
+] as const;
+
+// HMRC PAYE general enquiries line — a fixed published number, not per-letter.
+const HMRC_PHONE = "0300 200 3300";
 
 export default async function LetterPreview({
   params,
@@ -20,196 +35,236 @@ export default async function LetterPreview({
   if (letter === null) notFound();
 
   return (
-    <main className="mx-auto max-w-3xl px-6 py-12 sm:px-10 sm:py-16">
-      <article className="relative bg-surface-raised px-7 py-10 sm:px-14 sm:py-14 ring-1 ring-rule">
-        {letter.type === "p2" ? (
-          <P2Body letter={letter} />
-        ) : (
-          <P800Body letter={letter} />
-        )}
+    // A neutral-grey backdrop so the white letter reads as a document on a
+    // surface, not against the app's warm bone chrome.
+    <div className="min-h-dvh bg-neutral-100">
+      <main className="mx-auto max-w-3xl px-6 py-12 sm:px-10 sm:py-16">
+        <article
+          className="bg-white px-8 py-10 text-black shadow-sm ring-1 ring-neutral-200 sm:px-12 sm:py-12"
+          style={{ fontFamily: SANS }}
+        >
+          {letter.type === "p2" ? (
+            <P2Body letter={letter} />
+          ) : (
+            <P800Body letter={letter} />
+          )}
 
-        <QrCorner id={id} />
+          <QrBlock id={id} />
 
-        <footer className="mt-14 border-t border-rule pt-4 text-xs leading-relaxed text-ink-faint">
-          {/* from: p2-verbatim-strings.md — standard retention + licence chrome */}
-          <p>Please keep this notice. You may need it if you check your tax.</p>
-          <p className="mt-2">
-            Contains public sector information licensed under the Open
-            Government Licence v3.0.
-          </p>
-        </footer>
-      </article>
-    </main>
+          <LetterFooter formCode={letter.type === "p2" ? "P2 (New)" : "P800"} />
+        </article>
+      </main>
+    </div>
   );
 }
 
-function Masthead({ title, taxYear }: { title: string; taxYear: string }) {
-  // from: p2-verbatim-strings.md L1–L4 — the masthead block. The Crown logo is
-  // deliberately not reproduced (OGL).
+function Masthead({ title, subtitle }: { title: string; subtitle: string }) {
   return (
-    <header className="border-b-2 border-rule-strong pb-4">
-      <p className="font-display text-xl font-bold tracking-tight text-ink">
-        HM Revenue &amp; Customs
-      </p>
-      <div className="mt-3 flex flex-wrap items-baseline justify-between gap-x-6 gap-y-1">
-        <h1 className="font-display text-2xl tracking-tight sm:text-3xl">
-          {title}
-        </h1>
-        <p className="tnum font-display text-sm uppercase tracking-[0.14em] text-ink-muted">
-          Tax year {taxYear}
-        </p>
+    <header>
+      <div className="flex items-center justify-between gap-6">
+        <Image
+          src="/HMRC_logo.png"
+          alt="HM Revenue & Customs"
+          width={208}
+          height={117}
+          priority
+          className="h-auto w-[150px] sm:w-[178px]"
+        />
+        <div className="text-right">
+          {/* The page's single document heading; inline font + tracking reset
+              override the app's h1 display face (see SANS note above). */}
+          <h1
+            style={{ fontFamily: SANS }}
+            className="text-lg font-bold leading-tight tracking-normal sm:text-xl"
+          >
+            {title}
+          </h1>
+          <p className="mt-1 text-sm">{subtitle}</p>
+        </div>
       </div>
+      {/* The heavy band under the masthead — an HMRC print signature. Bled to
+          the paper edges so it spans full width like the scan. */}
+      <div className="mt-4 -mx-8 h-1.5 bg-black sm:-mx-12" />
     </header>
   );
 }
 
+function LetterMeta({
+  recipient,
+  note,
+  details,
+}: {
+  recipient: string;
+  note: string;
+  details: { label: string; value: string }[];
+}) {
+  return (
+    <section className="mt-8 grid grid-cols-1 gap-x-10 gap-y-8 sm:grid-cols-2">
+      <address className="text-sm not-italic leading-relaxed">
+        {recipient}
+      </address>
+
+      <div className="text-sm leading-relaxed">
+        <p>{note}</p>
+        <div className="mt-3">
+          {RETURN_ADDRESS.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
+        {/* Labels bold at a fixed column, values left-aligned at one tab stop,
+            no rules — the scan's detail block. */}
+        <dl className="mt-12 grid grid-cols-[max-content_1fr] gap-x-8 gap-y-3">
+          {details.map((d) => (
+            <div key={d.label} className="contents">
+              <dt className="font-bold">{d.label}</dt>
+              <dd className="tnum">{d.value}</dd>
+            </div>
+          ))}
+        </dl>
+      </div>
+    </section>
+  );
+}
+
 function P2Body({ letter }: { letter: P2Letter }) {
+  const details = [
+    { label: "Phone", value: HMRC_PHONE },
+    { label: "National Insurance number", value: letter.nino_masked },
+    { label: "Date", value: monthYear(letter.issue_date) },
+  ];
+
   return (
     <>
-      {/* P2 letters cover 6 April → 5 April; render the full span from the
-          stored "2026 to 2027" so the masthead reads like the issued letter. */}
       <Masthead
         title="PAYE Coding Notice"
-        taxYear={taxYearSpan(letter.tax_year)}
+        subtitle={`Tax code for the year ${taxYearShort(letter.tax_year)}`}
       />
 
-      <RecipientRow
-        name={letter.recipient_name}
-        nino={letter.nino_masked}
-        issueDate={letter.issue_date}
+      <LetterMeta
+        recipient={letter.recipient_name}
+        // from: p2-verbatim-strings.md — the keep-your-notices note, verbatim.
+        note="Please keep all your Coding Notices. You may need to use them if you have to fill in a tax return. Please tell us your tax reference and National Insurance number if you contact us."
+        details={details}
       />
 
-      {/* from: p2-verbatim-strings.md — salutation + opening paragraph */}
-      <p className="mt-8 max-w-[60ch] text-lg">
-        {salutation(letter.recipient_name)}
-      </p>
-      <p className="mt-4 max-w-[60ch] text-lg leading-relaxed">
-        This notice tells you about the tax code we will use to work out the
-        Income Tax taken from your pay or pension.
-      </p>
-      <p className="mt-4 max-w-[60ch] text-lg leading-relaxed">
-        Your tax code is{" "}
-        <span className="tnum font-semibold text-ink">
-          {letter.current_code}
-        </span>
-        . We give this code to {letter.employer_name} so the right amount of tax
-        is taken before you are paid.
+      <p className="mt-10 text-sm">{salutation(letter.recipient_name)}</p>
+
+      <p className="mt-5 text-base font-bold leading-snug">
+        Your tax code for the year from {taxYearSpan(letter.tax_year)} is{" "}
+        <span className="tnum">{letter.current_code}</span>
       </p>
 
-      <CodeTable letter={letter} />
+      <p className="mt-4 text-sm leading-relaxed">
+        {letter.employer_name} will use this tax code to work out how much tax
+        to take off the amount they pay you from {taxYearStart(letter.tax_year)}
+        . It is important that you check your tax code is right. You do not need
+        to contact us unless you think your tax code is wrong. If you contact us
+        you will need your National Insurance number and tax reference.
+      </p>
 
-      {/* The adjustments paragraph. The confusing_line is the model's verbatim
-          hard sentence — highlighted as a proof mark, never paraphrased. */}
-      <div className="mt-8 border-l-2 border-accent bg-accent/10 py-3 pl-4 pr-3 text-ink">
-        <p className="max-w-[58ch] text-lg leading-relaxed">
-          {letter.confusing_line}
-        </p>
-      </div>
+      <CodeBox letter={letter} />
 
-      {/* from: p2-verbatim-strings.md — "what to do if wrong" footer */}
-      <div className="mt-10 border-t border-rule pt-6">
-        <h2 className="font-display text-lg tracking-tight">
-          If you think your tax code is wrong
-        </h2>
-        <p className="mt-2 max-w-[60ch] text-lg leading-relaxed">
-          If you think your tax code is wrong, please contact us. You can also
-          check or update your details in your Personal Tax Account at
-          www.gov.uk/personal-tax-account.
-        </p>
-      </div>
+      <p className="mt-6 text-sm leading-relaxed">
+        We take <span className="tnum">{pounds(letter.tax_free_amount)}</span>{" "}
+        into a tax code of <span className="tnum">{letter.current_code}</span>.{" "}
+        {letter.employer_name} will use this code to take off the right amount
+        of tax each time they pay you from {taxYearStart(letter.tax_year)}. We
+        tell them your tax code, but we do not tell them how we worked it out.
+        Someone with the full Personal Allowance and no other adjustments has
+        the code <span className="tnum">{letter.standard_code}</span>.
+      </p>
+
+      {/* The model's verbatim "hardest sentence" — on a real letter it sits in
+          the body prose, so it renders as a plain paragraph, never a callout. */}
+      <p className="mt-4 text-sm leading-relaxed">{letter.confusing_line}</p>
+
+      <Notes lines={letter.lines} />
     </>
   );
 }
 
-function CodeTable({ letter }: { letter: P2Letter }) {
+function CodeBox({ letter }: { letter: P2Letter }) {
   return (
-    <section className="mt-10">
-      {/* from: p2-verbatim-strings.md — table heading, verbatim */}
-      <h2 className="font-display text-xl tracking-tight">
-        How we worked out your tax-free amount
-      </h2>
-
-      <table className="mt-4 w-full border-collapse text-lg">
-        <thead>
-          <tr className="border-y border-rule-strong text-left">
-            <th className="py-2 pr-4 font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
-              What we took into account
-            </th>
-            <th className="py-2 pl-4 text-right font-display text-xs font-semibold uppercase tracking-[0.12em] text-ink-muted">
-              Amount
-            </th>
-          </tr>
-        </thead>
+    <section className="mt-6 border border-black">
+      <p className="px-4 pb-1 pt-3 text-sm font-bold">
+        This is how we worked out your tax code:
+      </p>
+      <table className="w-full border-collapse text-sm">
         <tbody>
           {letter.lines.map((line, i) => (
-            <tr
-              key={`${line.label}-${i}`}
-              className="border-b border-rule align-top"
-            >
-              <td className="py-3 pr-4">
-                <p className="font-medium text-ink">{line.label}</p>
-                {/* the pre-written plain-english gloss, set as a muted aside */}
-                <p className="mt-0.5 max-w-[52ch] text-base leading-snug text-ink-muted">
-                  {line.plain_english}
-                </p>
+            <tr key={`${line.label}-${i}`}>
+              <td className="py-1 pl-4 pr-2">{line.label}</td>
+              {/* Additions print unsigned, deductions carry a real minus — the
+                  scan signs only the adjustments, not the base allowance. */}
+              <td className="tnum whitespace-nowrap px-2 py-1 text-right">
+                {line.amount < 0
+                  ? poundsSigned(line.amount)
+                  : pounds(line.amount)}
               </td>
-              <td className="tnum py-3 pl-4 text-right text-ink">
-                {poundsSigned(line.amount)}
+              <td className="whitespace-nowrap py-1 pl-2 pr-4 text-left">
+                (see Note {i + 1} )
               </td>
             </tr>
           ))}
-          <tr className="border-b-2 border-rule-strong">
-            <td className="py-3 pr-4 font-display text-lg font-semibold">
-              Your tax-free amount
-            </td>
-            <td className="tnum py-3 pl-4 text-right font-display text-lg font-semibold">
+          {/* The closing tax-free amount, set apart by a thin rule over the
+              figure column only — as in the scan, not a heavy full-width rule. */}
+          <tr>
+            <td className="py-1 pl-4 pr-2">a tax-free amount of</td>
+            <td className="tnum whitespace-nowrap border-t border-black px-2 py-1 text-right">
               {pounds(letter.tax_free_amount)}
             </td>
+            <td className="py-1 pl-2 pr-4" />
           </tr>
         </tbody>
       </table>
+    </section>
+  );
+}
 
-      <p className="mt-4 max-w-[60ch] leading-relaxed text-ink-muted">
-        We turn your tax-free amount into the code{" "}
-        <span className="tnum font-semibold text-ink">
-          {letter.current_code}
-        </span>{" "}
-        by removing the last digit. Someone with the full Personal Allowance and
-        no other adjustments has the code{" "}
-        <span className="tnum font-semibold text-ink">
-          {letter.standard_code}
-        </span>
-        .
-      </p>
+function Notes({ lines }: { lines: P2Letter["lines"] }) {
+  return (
+    <section className="mt-8">
+      <p className="text-sm font-bold">Notes</p>
+      <ol className="mt-2 space-y-3">
+        {lines.map((line, i) => (
+          <li key={`note-${i}`} className="flex gap-3 text-sm leading-relaxed">
+            <span className="tnum w-4 shrink-0">{i + 1}</span>
+            <span>{line.plain_english}</span>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }
 
 function P800Body({ letter }: { letter: P800Letter }) {
   const overpaid = letter.result === "overpaid";
+  const details = [
+    { label: "Phone", value: HMRC_PHONE },
+    { label: "National Insurance number", value: letter.nino_masked },
+    { label: "Reference", value: letter.p800_reference },
+  ];
+
   return (
     <>
       <Masthead
         title="Tax Calculation"
-        taxYear={taxYearSpan(letter.tax_year)}
+        subtitle={`Tax year ${taxYearShort(letter.tax_year)}`}
       />
 
-      <RecipientRow
-        name={letter.recipient_name}
-        nino={letter.nino_masked}
-        reference={letter.p800_reference}
+      <LetterMeta
+        recipient={letter.recipient_name}
+        note="Please tell us your reference and National Insurance number if you contact us."
+        details={details}
       />
 
-      {/* from: p800-verbatim-strings.md — salutation + opening line */}
-      <p className="mt-8 max-w-[60ch] text-lg">
-        {salutation(letter.recipient_name)}
-      </p>
-      <p className="mt-4 max-w-[60ch] text-lg leading-relaxed">
+      <p className="mt-10 text-sm">{salutation(letter.recipient_name)}</p>
+      <p className="mt-4 text-sm leading-relaxed">
         We have checked the Income Tax you paid in the tax year{" "}
         {letter.tax_year}. Our calculation is set out below.
       </p>
 
-      <table className="mt-8 w-full border-collapse text-lg">
+      <table className="mt-6 w-full border-collapse text-sm">
         <tbody>
           <CalcRow
             label="Income you received"
@@ -227,30 +282,24 @@ function P800Body({ letter }: { letter: P800Letter }) {
             label="Tax you have already paid"
             value={pounds(letter.tax_paid)}
           />
-          <tr className="border-y-2 border-rule-strong">
-            <td className="py-3 pr-4 font-display text-lg font-semibold">
+          <tr className="border-y-2 border-black">
+            <td className="py-2 pr-4 font-bold">
               {overpaid ? "You are due a refund of" : "You owe"}
             </td>
-            <td className="tnum py-3 pl-4 text-right font-display text-lg font-semibold text-accent">
+            <td className="tnum py-2 pl-4 text-right font-bold">
               {pounds(letter.amount)}
             </td>
           </tr>
         </tbody>
       </table>
 
-      <div className="mt-8 border-l-2 border-accent bg-accent/10 py-3 pl-4 pr-3 text-ink">
-        <p className="max-w-[58ch] text-lg leading-relaxed">
-          {letter.confusing_line}
-        </p>
-      </div>
+      <p className="mt-6 text-sm leading-relaxed">{letter.confusing_line}</p>
 
-      <div className="mt-10 border-t border-rule pt-6">
-        <h2 className="font-display text-lg tracking-tight">
+      <div className="mt-8">
+        <p className="text-sm font-bold">
           {overpaid ? "How you will be paid" : "How to pay"}
-        </h2>
-        <p className="mt-2 max-w-[60ch] text-lg leading-relaxed">
-          {letter.claim_method}
         </p>
+        <p className="mt-2 text-sm leading-relaxed">{letter.claim_method}</p>
       </div>
     </>
   );
@@ -258,71 +307,23 @@ function P800Body({ letter }: { letter: P800Letter }) {
 
 function CalcRow({ label, value }: { label: string; value: string }) {
   return (
-    <tr className="border-b border-rule">
-      <td className="py-3 pr-4 text-ink">{label}</td>
-      <td className="tnum py-3 pl-4 text-right text-ink">{value}</td>
+    <tr className="border-b border-neutral-300">
+      <td className="py-2 pr-4">{label}</td>
+      <td className="tnum py-2 pl-4 text-right">{value}</td>
     </tr>
   );
 }
 
-function RecipientRow({
-  name,
-  nino,
-  issueDate,
-  reference,
-}: {
-  name: string;
-  nino: string;
-  issueDate?: string;
-  reference?: string;
-}) {
-  return (
-    <dl className="mt-6 grid grid-cols-1 gap-x-8 gap-y-1 text-base sm:grid-cols-3">
-      <Field label="Issued to" value={name} />
-      <Field label="National Insurance number" value={nino} mono />
-      {issueDate ? (
-        <Field label="Date of issue" value={longDate(issueDate)} />
-      ) : null}
-      {reference ? <Field label="Reference" value={reference} mono /> : null}
-    </dl>
-  );
-}
-
-function Field({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string;
-  value: string;
-  mono?: boolean;
-}) {
-  return (
-    <div className="border-t border-rule pt-2">
-      <dt className="font-display text-[0.7rem] uppercase tracking-[0.14em] text-ink-faint">
-        {label}
-      </dt>
-      <dd className={`mt-0.5 text-ink ${mono ? "tnum" : ""}`}>{value}</dd>
-    </div>
-  );
-}
-
-function QrCorner({ id }: { id: string }) {
+function QrBlock({ id }: { id: string }) {
   // One image, two entry points: a real scannable QR (camera apps read /l/{id})
   // and an anchor (clicks/taps go to the same destination). No JS short-circuit.
   return (
-    <div className="mt-12 flex items-end justify-end border-t border-rule pt-6">
-      <div className="text-right">
-        <p className="font-display text-[0.7rem] uppercase tracking-[0.14em] text-ink-faint">
-          Confused by this letter?
-        </p>
-        <p className="mt-0.5 mb-2 max-w-[24ch] text-sm text-ink-muted">
-          Scan to hear it explained in plain English.
-        </p>
+    <section className="mt-12 flex justify-end">
+      <div className="max-w-[16rem] text-right">
         <a
           href={`/l/${id}`}
           aria-label="Open this letter on a phone"
-          className="inline-block ring-1 ring-rule transition-opacity duration-150 ease-out hover:opacity-80"
+          className="inline-block border border-black transition-opacity duration-150 ease-out hover:opacity-80"
         >
           {/* Plain <img>, not next/image: the QR is served by FastAPI on a
               different origin and must rasterise identically into the PDF export. */}
@@ -330,12 +331,25 @@ function QrCorner({ id }: { id: string }) {
           <img
             src={`${env.NEXT_PUBLIC_API_URL}/letters/${id}/qr.png`}
             alt="QR code — scan with your phone or click to open"
-            width={160}
-            height={160}
+            width={140}
+            height={140}
           />
         </a>
+        <p className="mt-2 text-xs leading-snug">
+          Scan with your phone to hear this letter explained in plain English.
+        </p>
       </div>
-    </div>
+    </section>
+  );
+}
+
+function LetterFooter({ formCode }: { formCode: string }) {
+  return (
+    <footer className="mt-12 grid grid-cols-3 items-end pt-3 text-xs">
+      <span className="font-bold">{formCode}</span>
+      <span className="text-center">Page 1</span>
+      <span />
+    </footer>
   );
 }
 
@@ -344,6 +358,19 @@ function taxYearSpan(taxYear: string): string {
   const [start, end] = taxYear.split(" to ");
   if (start === undefined || end === undefined) return taxYear;
   return `6 April ${start} to 5 April ${end}`;
+}
+
+// "2026 to 2027" → "6 April 2026" (the tax-year start, as printed in body prose).
+function taxYearStart(taxYear: string): string {
+  const [start] = taxYear.split(" to ");
+  return start === undefined ? taxYear : `6 April ${start}`;
+}
+
+// "2026 to 2027" → "2026-27" (the compact masthead form).
+function taxYearShort(taxYear: string): string {
+  const [start, end] = taxYear.split(" to ");
+  if (start === undefined || end === undefined) return taxYear;
+  return `${start}-${end.slice(2)}`;
 }
 
 // from: p2-verbatim-strings.md — salutation pattern "Dear <name>,"
