@@ -46,6 +46,8 @@
   html {
     background-color: var(--color-surface);
     color: var(--color-ink);
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
   }
   body {
     font-family: var(--font-body);

@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Familjen_Grotesk, Newsreader } from "next/font/google";
 import "./globals.css";
@@ -17,6 +17,14 @@ const body = Newsreader({
   variable: "--font-newsreader",
   display: "swap",
 });
+
+// themeColor is a browser <meta> value, not a component style — raw hex permitted here only.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: "#f1f0ea",
+};
 
 export const metadata: Metadata = {
   title: {

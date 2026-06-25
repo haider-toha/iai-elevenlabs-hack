@@ -6,14 +6,30 @@ import {
   useConversationClientTool,
 } from "@elevenlabs/react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import {
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 
-import type { SuspectedError } from "@/lib/api";
+import type { Letter, P2Letter, P800Letter, SuspectedError } from "@/lib/api";
 import { env } from "@/lib/env";
+import { pounds, poundsSigned } from "@/lib/letter-format";
 
-type Turn = { role: "user" | "agent"; text: string };
+// "system" is a non-spoken boundary marker (e.g. the one-time Welsh switch beat),
+// rendered as a centred divider rather than a bubble — it is not a conversation turn.
+type Turn = { role: "user" | "agent" | "system"; text: string };
 type Source = { label: string; anchor: string };
 type Language = "en" | "cy";
+
+// The three internal view-states of the one /l/[id] route (§1.2). The provider +
+// session live across all of them, mounted once; a phase change never unmounts
+// the session. "preparing" is the cold-open reading theatre (Screen 2),
+// "summary" is the findings card (Screen 3), "conversation" is the live voice UI
+// (Screens 4-9). These are NOT sub-routes and read no ?step= URL state.
+type Phase = "preparing" | "summary" | "conversation";
 
 // The agent triggers `switch_language` (registered server-side, param `target`)
 // when the user asks for Welsh. The wire passes parameters as an untyped record,
@@ -22,12 +38,13 @@ type ConvaiTools = {
   switch_language: (params: Record<string, unknown>) => void;
 };
 
+// The leaf takes the typed Letter and the two prompt blocks built server-side.
+// sources / suspected errors / id are derived from the letter here rather than
+// drilled as separate props — one source of truth, exhaustive over the union.
 type LeafProps = {
+  letter: Letter;
   letterBlock: string;
   letterBlockWelsh: string;
-  suspectedErrors: SuspectedError[];
-  sources: Source[];
-  letterId: string;
 };
 
 const PROMPT_CHIPS = [
@@ -37,10 +54,20 @@ const PROMPT_CHIPS = [
   "What do I need to do?",
 ];
 
+// The reading-theatre checklist (Screen 2). Hard-coded demo copy mapping to no
+// real processing — the letter is already structured in Postgres (D8).
+const READING_STEPS = [
+  "Extracting key details",
+  "Understanding the content",
+  "Identifying important information",
+  "Finding official guidance",
+  "Preparing your summary",
+];
+
 const WELSH_FIRST_MESSAGE =
   "Helo, gallaf weld bod gennych hysbysiad cod treth gan CThEM. Beth hoffech chi ei wybod?";
 const ENGLISH_FIRST_MESSAGE =
-  "Hi, I can see you've got a tax code notice from HMRC. What would you like to know?";
+  "Hi, I can see you've got a tax code notice from HMRC. Which language would you like to continue in?";
 
 // A growing per-character timeline: for each char of the agent's current
 // response, the absolute wall-clock time (performance.now() ms) at which it
@@ -66,79 +93,93 @@ export function ConvaiLeaf(props: LeafProps) {
   );
 }
 
-function ConvaiSession({
-  letterBlock,
-  letterBlockWelsh,
-  suspectedErrors,
-  sources,
-  letterId,
-}: LeafProps) {
+function ConvaiSession({ letter, letterBlock, letterBlockWelsh }: LeafProps) {
+  const [phase, setPhase] = useState<Phase>("preparing");
   const [transcript, setTranscript] = useState<Turn[]>([]);
   const [agentLive, setAgentLive] = useState("");
   const [revealedCount, setRevealedCount] = useState(0);
   const [language, setLanguage] = useState<Language>("en");
   const [error, setError] = useState<string | null>(null);
   const [agentHasReplied, setAgentHasReplied] = useState(false);
+  const [draft, setDraft] = useState("");
 
   // Absolute spoken-at timestamps per char of the *current* agent response.
   // A ref (not state) because the reveal interval mutates it on every audio
   // chunk and reads it every ~30ms without needing to re-render the tree.
   const timeline = useRef<RevealTimeline>({ spokenAtMs: [] });
+  // The transcript scroll region + the typed-input element; refs so we can
+  // auto-scroll to the latest turn and focus the input on "Type instead".
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const focusInputOnEnter = useRef(false);
+
+  // Derived from the typed letter, exhaustive over the P2 | P800 union — P800
+  // has neither lines nor suspected errors, so both collapse to [] (the action
+  // card + citations simply never show for it; no crash).
+  const letterId = letter.id;
+  const suspectedErrors: SuspectedError[] =
+    letter.type === "p2" ? letter.suspected_errors : [];
+  const sources: Source[] =
+    letter.type === "p2"
+      ? letter.lines.map((l) => ({ label: l.label, anchor: l.govuk_anchor }))
+      : [];
 
   // v1.8.0's convenience hook: it both reads status / exposes the session
   // controls AND registers these callbacks with the provider via a latest-
-  // closure ref, so the handlers always see the current state setters.
-  const { status, startSession, endSession, sendUserMessage } = useConversation({
-    onMessage: (m) => {
-      if (m.source === "user") {
-        setTranscript((t) => [...t, { role: "user", text: m.message }]);
-      }
-      if (m.source === "ai") {
-        setTranscript((t) => [...t, { role: "agent", text: m.message }]);
-        setAgentHasReplied(true);
-      }
-    },
-    onAgentChatResponsePart: (part) => {
-      // part: { text, type: "start" | "delta" | "stop", event_id }.
-      // We accumulate the *target* text from deltas but gate visibility on the
-      // audio timeline below — so the user sees text appear in step with the
-      // voice, not in jumpy LLM chunks.
-      if (part.type === "start") {
-        setAgentLive("");
-        setRevealedCount(0);
-        timeline.current = { spokenAtMs: [] };
-      } else if (part.type === "delta") {
-        setAgentLive((s) => s + part.text);
-      } else if (part.type === "stop") {
-        setAgentLive("");
-        setRevealedCount(0);
-        timeline.current = { spokenAtMs: [] };
-      }
-    },
-    onAudioAlignment: (a) => {
-      // Field names are snake_case on the wire (AudioEventAlignment). Convert
-      // each char's chunk-relative start into an absolute performance.now() ms
-      // and append to the cumulative timeline. The reveal interval below
-      // walks this timeline to drive `revealedCount`.
-      const anchor = performance.now();
-      const next = timeline.current.spokenAtMs.slice();
-      for (let i = 0; i < a.chars.length; i++) {
-        next.push(anchor + (a.char_start_times_ms[i] ?? 0));
-      }
-      timeline.current = { spokenAtMs: next };
-    },
-    // onError(message, context) — the first arg is the message string, not an
-    // Error object. Surface it inline rather than logging to a console nobody
-    // watches during a demo.
-    onError: (message) => setError(message),
-    onStatusChange: ({ status }) => {
-      if (status === "disconnected") {
-        setAgentLive("");
-        setRevealedCount(0);
-        timeline.current = { spokenAtMs: [] };
-      }
-    },
-  });
+  // closure ref, so the handlers always see the current state setters. `mode`
+  // is the SDK's speaking/listening axis, additively destructured for the orb.
+  const { status, mode, startSession, endSession, sendUserMessage } =
+    useConversation({
+      onMessage: (m) => {
+        if (m.source === "user") {
+          setTranscript((t) => [...t, { role: "user", text: m.message }]);
+        }
+        if (m.source === "ai") {
+          setTranscript((t) => [...t, { role: "agent", text: m.message }]);
+          setAgentHasReplied(true);
+        }
+      },
+      onAgentChatResponsePart: (part) => {
+        // part: { text, type: "start" | "delta" | "stop", event_id }.
+        // We accumulate the *target* text from deltas but gate visibility on the
+        // audio timeline below — so the user sees text appear in step with the
+        // voice, not in jumpy LLM chunks.
+        if (part.type === "start") {
+          setAgentLive("");
+          setRevealedCount(0);
+          timeline.current = { spokenAtMs: [] };
+        } else if (part.type === "delta") {
+          setAgentLive((s) => s + part.text);
+        } else if (part.type === "stop") {
+          setAgentLive("");
+          setRevealedCount(0);
+          timeline.current = { spokenAtMs: [] };
+        }
+      },
+      onAudioAlignment: (a) => {
+        // Field names are snake_case on the wire (AudioEventAlignment). Convert
+        // each char's chunk-relative start into an absolute performance.now() ms
+        // and append to the cumulative timeline. The reveal interval below
+        // walks this timeline to drive `revealedCount`.
+        const anchor = performance.now();
+        const next = timeline.current.spokenAtMs.slice();
+        for (let i = 0; i < a.chars.length; i++) {
+          next.push(anchor + (a.char_start_times_ms[i] ?? 0));
+        }
+        timeline.current = { spokenAtMs: next };
+      },
+      // onError(message, context) — the first arg is the message string, not an
+      // Error object. Surface it inline rather than logging to a console nobody
+      // watches during a demo.
+      onError: (message) => setError(message),
+      onStatusChange: ({ status }) => {
+        if (status === "disconnected") {
+          setAgentLive("");
+          setRevealedCount(0);
+          timeline.current = { spokenAtMs: [] };
+        }
+      },
+    });
   const live = status === "connected" || status === "connecting";
 
   // Audio-paced reveal: ~30ms tick (≈animation frame cadence) walks the
@@ -156,6 +197,37 @@ function ConvaiSession({
     }, 30);
     return () => window.clearInterval(tick);
   }, [status]);
+
+  // Screen 2 → 3 reconciliation (§1.1 vs §Screen-2): the reading theatre is NOT
+  // a redirect, NOT a sub-route, and reads no `?step=` URL state — /l/[id]
+  // renders itself self-sufficiently and the brief intro simply resolves to the
+  // summary in this same client subtree. CRITICAL (§1.5/§4.7): it must NEVER
+  // call startSession/getUserMedia or auto-advance into the session — the voice
+  // session only starts later on a FRESH user tap in `summary`. This is the one
+  // sanctioned setTimeout in the leaf.
+  useEffect(() => {
+    if (phase !== "preparing") return;
+    const id = window.setTimeout(() => setPhase("summary"), 3000);
+    return () => window.clearTimeout(id);
+  }, [phase]);
+
+  // Keep the latest turn / live caret in view as the transcript grows — but only
+  // when the reader is already near the bottom, so scrolling up to re-read an
+  // earlier turn isn't yanked back every 30ms reveal tick.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (el === null) return;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 80;
+    if (nearBottom) el.scrollTop = el.scrollHeight;
+  }, [transcript, revealedCount, phase]);
+
+  // Focus the typed input when "Type instead" brought us into the conversation.
+  useEffect(() => {
+    if (phase === "conversation" && focusInputOnEnter.current) {
+      focusInputOnEnter.current = false;
+      inputRef.current?.focus();
+    }
+  }, [phase]);
 
   async function startInEnglish() {
     setError(null);
@@ -187,6 +259,11 @@ function ConvaiSession({
       endSession();
       const signedUrl = await fetchSignedUrl();
       setLanguage("cy");
+      // The reconnect beat (§4.9): a one-time, explicit transcript boundary so
+      // the switch reads as a deliberate handover, not a dropped/duplicated turn.
+      // It sits between the English turns above and the Welsh ones the restarted
+      // session will append below.
+      setTranscript((t) => [...t, { role: "system", text: "Switching to Welsh" }]);
       startSession({
         signedUrl,
         overrides: {
@@ -210,9 +287,22 @@ function ConvaiSession({
     if (readTarget(params) === "cy") void restartInWelsh();
   });
 
-  function onPrimaryTap() {
-    if (live) endSession();
-    else void startInEnglish();
+  // The sacred start chain (§1.5): getUserMedia → fetchSignedUrl → startSession
+  // stays inside this direct user tap. startInEnglish() is invoked
+  // synchronously so getUserMedia is reached within the gesture; never move it
+  // into an effect/timeout/router transition.
+  function beginConversation(focusInput: boolean) {
+    focusInputOnEnter.current = focusInput;
+    void startInEnglish();
+    setPhase("conversation");
+  }
+
+  // The docked X. Hiding the live voice view without unmounting the provider
+  // would leave the mic/WebSocket/wake-lock alive, so ending here is REQUIRED,
+  // not redundant unmount teardown (§1.3) — the provider stays mounted.
+  function endConversation() {
+    endSession();
+    setPhase("summary");
   }
 
   function askChip(text: string) {
@@ -225,88 +315,358 @@ function ConvaiSession({
     sendUserMessage(text);
   }
 
-  const showActionChip = suspectedErrors.length > 0 && agentHasReplied;
+  function onSubmitDraft(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    const text = draft.trim();
+    if (text === "" || !live) return;
+    askChip(text);
+    setDraft("");
+  }
+
+  const hasUserTurn = transcript.some((t) => t.role === "user");
+  const showPrompts = live && !hasUserTurn;
+  const showActionCard = suspectedErrors.length > 0 && agentHasReplied;
+  const topError = suspectedErrors[0];
 
   return (
-    <section className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <button
-          type="button"
-          onClick={onPrimaryTap}
-          aria-pressed={live}
-          className={`rounded-tactile px-5 py-3 font-display text-lg font-medium transition-opacity duration-150 ease-out hover:opacity-90 ${
-            live
-              ? "border border-rule-strong bg-surface-sunken text-ink"
-              : "bg-accent text-ink-invert"
-          }`}
-        >
-          {live ? "End conversation" : "Ask about this letter"}
-        </button>
-
-        <span className="flex items-center gap-2 font-display text-sm text-ink-muted">
-          <span
-            aria-hidden
-            className="size-2 rounded-tactile"
-            style={{
-              backgroundColor:
-                status === "connected"
-                  ? "var(--color-positive)"
-                  : status === "connecting"
-                    ? "var(--color-warning)"
-                    : "var(--color-ink-faint)",
-            }}
-          />
-          {statusLabel(status, language)}
-        </span>
-      </div>
-
-      {error !== null ? (
-        <p
-          role="alert"
-          className="rounded-tactile border-l-2 border-accent bg-accent/10 py-2 pl-3 pr-2 text-base text-ink"
-        >
-          {error}
-        </p>
-      ) : null}
-
-      <div className="flex flex-wrap gap-2">
-        {PROMPT_CHIPS.map((chip) => (
-          <button
-            key={chip}
-            type="button"
-            onClick={() => askChip(chip)}
-            disabled={!live}
-            className="rounded-tactile border border-rule px-3 py-1.5 text-base text-ink transition-opacity duration-150 ease-out hover:border-rule-strong disabled:opacity-40"
+    <div className="flex min-h-0 flex-1 flex-col bg-surface">
+      {phase === "preparing" ? (
+        <PreparingView />
+      ) : phase === "summary" ? (
+        <SummaryView
+          letter={letter}
+          onChat={() => beginConversation(false)}
+          onType={() => beginConversation(true)}
+        />
+      ) : (
+        <>
+          <div
+            ref={scrollRef}
+            className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4"
           >
-            {chip}
-          </button>
-        ))}
-      </div>
+            {error !== null ? (
+              <p
+                role="alert"
+                className="mb-3 rounded-tactile border-l-2 border-accent bg-accent/10 py-2 pl-3 pr-2 text-base text-ink"
+              >
+                {error}
+              </p>
+            ) : null}
 
-      <TranscriptPanel
-        items={transcript}
-        live={agentLive}
-        revealedCount={revealedCount}
-      />
+            {transcript.length === 0 && agentLive === "" && error === null ? (
+              <p className="mt-8 text-center text-base text-ink-faint">
+                {status === "connecting"
+                  ? "Connecting to Marginalia…"
+                  : status === "connected"
+                    ? "Marginalia is getting ready…"
+                    : "Starting…"}
+              </p>
+            ) : null}
 
-      {agentHasReplied && sources.length > 0 ? (
-        <CitationChips sources={sources} />
-      ) : null}
+            <TranscriptBubbles
+              items={transcript}
+              live={agentLive}
+              revealedCount={revealedCount}
+            />
 
-      {showActionChip ? (
-        <Link
-          href={`/actions/update-company-car/${letterId}`}
-          className="inline-flex w-fit items-center gap-2 rounded-tactile bg-accent px-4 py-2.5 font-display text-base font-medium text-ink-invert transition-opacity duration-150 ease-out hover:opacity-90"
-        >
-          Fix this in your tax account
-          <span aria-hidden>&rarr;</span>
-        </Link>
-      ) : null}
-    </section>
+            {agentHasReplied && sources.length > 0 ? (
+              <CitationChips sources={sources} />
+            ) : null}
+
+            {showActionCard && topError !== undefined ? (
+              <ActionCard error={topError} letterId={letterId} />
+            ) : null}
+          </div>
+
+          {showPrompts ? (
+            <ResponseRows onAsk={askChip} disabled={!live} />
+          ) : null}
+
+          <OrbDock status={status} mode={mode} language={language} />
+
+          <div className="shrink-0 border-t border-rule bg-surface px-3 py-2.5">
+            <div className="flex items-center gap-2">
+              <form
+                onSubmit={onSubmitDraft}
+                className="flex min-w-0 flex-1 items-center rounded-tactile border border-rule bg-surface-raised transition-colors duration-150 ease-out focus-within:border-rule-strong"
+              >
+                <input
+                  ref={inputRef}
+                  value={draft}
+                  onChange={(e) => setDraft(e.target.value)}
+                  placeholder="Ask anything"
+                  aria-label="Ask anything"
+                  enterKeyHint="send"
+                  autoComplete="off"
+                  className="h-11 min-w-0 flex-1 bg-transparent px-3.5 text-base text-ink outline-none placeholder:text-ink-faint"
+                />
+                <button
+                  type="submit"
+                  disabled={!live || draft.trim() === ""}
+                  aria-label="Send"
+                  className="grid size-11 shrink-0 place-items-center text-ink-muted transition-opacity duration-150 ease-out active:opacity-60 disabled:opacity-30"
+                >
+                  <IconSend className="size-5" />
+                </button>
+              </form>
+              <button
+                type="button"
+                onClick={endConversation}
+                aria-label="End conversation"
+                className="grid size-11 shrink-0 place-items-center rounded-full border border-rule-strong text-ink transition-colors duration-150 ease-out active:bg-surface-sunken"
+              >
+                <IconClose className="size-4" />
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
-function TranscriptPanel({
+// Screen 2 — the reading theatre. The phase auto-advances after ~3s (one
+// setTimeout in ConvaiSession); here we only stage the checklist reveal with a
+// CSS transition cascade (transition-delay + a single mounted flip — no timers,
+// no custom keyframes).
+function PreparingView() {
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setRevealed(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  return (
+    <div className="flex flex-1 flex-col justify-center gap-8 px-6 py-8">
+      <div>
+        <p className="font-display text-[0.7rem] uppercase tracking-[0.16em] text-ink-faint">
+          Marginalia
+        </p>
+        <h1 className="mt-2 font-display text-2xl tracking-tight text-ink">
+          Reading your letter
+        </h1>
+      </div>
+
+      <ul className="flex flex-col gap-3.5">
+        {READING_STEPS.map((step, i) => {
+          const last = i === READING_STEPS.length - 1;
+          return (
+            <li
+              key={step}
+              style={{ transitionDelay: `${i * 280}ms` }}
+              className={`flex items-center gap-3 transition duration-200 ease-out ${
+                revealed ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
+              }`}
+            >
+              <span
+                aria-hidden
+                className={`grid size-5 shrink-0 place-items-center ${
+                  last ? "text-accent" : "text-positive"
+                }`}
+              >
+                {last ? (
+                  <IconSpinner className="size-4 animate-spin" />
+                ) : (
+                  <IconCheck className="size-4" />
+                )}
+              </span>
+              <span className="text-base text-ink-muted">{step}</span>
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="flex items-start gap-3 rounded-tactile border border-rule bg-surface-raised px-4 py-3">
+        <IconLock className="mt-0.5 size-4 shrink-0 text-ink-faint" />
+        <div>
+          <p className="font-display text-sm font-medium text-ink">
+            Your data is private
+          </p>
+          <p className="mt-0.5 text-sm leading-relaxed text-ink-muted">
+            We don&apos;t store your letter or your conversation.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Screen 3 — the findings card + docked dual CTA. Exhaustive over the union:
+// P2 gets its code-line breakdown + the suspected-error proof-mark; P800 gets
+// its refund result + the calculation.
+function SummaryView({
+  letter,
+  onChat,
+  onType,
+}: {
+  letter: Letter;
+  onChat: () => void;
+  onType: () => void;
+}) {
+  const typeLabel =
+    letter.type === "p2" ? "PAYE Coding Notice" : "Tax Calculation";
+
+  return (
+    <>
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-6">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+          <span className="inline-flex items-center gap-1.5 rounded-tactile border border-rule bg-surface-raised px-2 py-1 font-display text-xs font-medium text-ink-muted">
+            <IconCheck className="size-3.5 text-positive" />
+            Recognised
+          </span>
+          <span className="font-display text-xs uppercase tracking-[0.14em] text-ink-faint">
+            {typeLabel} · <span className="tnum">{letter.tax_year}</span>
+          </span>
+        </div>
+
+        <h1 className="mt-4 font-display text-3xl tracking-tight text-ink">
+          Here&apos;s what we found
+        </h1>
+        <p className="mt-1 text-base text-ink-muted">
+          For {letter.recipient_name}
+        </p>
+
+        {letter.type === "p2" ? (
+          <P2Findings letter={letter} />
+        ) : (
+          <P800Findings letter={letter} />
+        )}
+
+        <p className="mt-8 border-t border-rule pt-4 text-xs leading-relaxed text-ink-faint">
+          This explains your letter — it is not formal tax advice. Contains
+          public sector information licensed under the Open Government Licence
+          v3.0.
+        </p>
+      </div>
+
+      <div className="shrink-0 border-t border-rule bg-surface px-5 py-4">
+        <button
+          type="button"
+          onClick={onChat}
+          className="flex min-h-[3.25rem] w-full items-center justify-center gap-2 rounded-tactile bg-accent px-5 font-display text-lg font-medium text-ink-invert transition-opacity duration-150 ease-out hover:opacity-90 active:opacity-80"
+        >
+          <IconMic className="size-5 text-ink-invert" />
+          Chat about this letter
+        </button>
+        <button
+          type="button"
+          onClick={onType}
+          className="mt-2.5 flex min-h-11 w-full items-center justify-center rounded-tactile border border-rule-strong px-5 font-display text-base font-medium text-ink transition-colors duration-150 ease-out active:bg-surface-sunken"
+        >
+          Type instead
+        </button>
+      </div>
+    </>
+  );
+}
+
+function P2Findings({ letter }: { letter: P2Letter }) {
+  const topError = letter.suspected_errors[0];
+  return (
+    <div className="mt-6 flex flex-col gap-5">
+      <section>
+        <p className="font-display text-[0.7rem] uppercase tracking-[0.16em] text-ink-faint">
+          How your tax-free amount is worked out
+        </p>
+        <dl className="mt-3 flex flex-col gap-2.5">
+          {letter.lines.map((line, i) => (
+            <div key={`${line.label}-${i}`} className="border-b border-rule pb-2.5">
+              <div className="flex items-baseline justify-between gap-3">
+                <dt className="font-display text-base font-medium text-ink">
+                  {line.label}
+                </dt>
+                <dd className="tnum shrink-0 text-base text-ink-muted">
+                  {poundsSigned(line.amount)}
+                </dd>
+              </div>
+              <p className="mt-1 text-base leading-relaxed text-ink-muted">
+                {line.plain_english}
+              </p>
+            </div>
+          ))}
+          <div className="flex items-baseline justify-between gap-3 pt-0.5">
+            <dt className="font-display text-base font-semibold text-ink">
+              Tax-free amount
+            </dt>
+            <dd className="tnum shrink-0 font-display text-base font-semibold text-ink">
+              {pounds(letter.tax_free_amount)} · {letter.current_code}
+            </dd>
+          </div>
+        </dl>
+      </section>
+
+      {topError !== undefined ? (
+        <section className="border-l-2 border-accent bg-accent/10 py-3 pl-3 pr-3">
+          <p className="font-display text-[0.7rem] uppercase tracking-[0.16em] text-accent">
+            Worth checking
+          </p>
+          <p className="mt-1.5 text-base leading-relaxed text-ink">
+            {topError.reason}
+          </p>
+          <p className="mt-2 text-base text-ink">
+            You could be overpaying about{" "}
+            <span className="tnum font-display font-semibold">
+              {pounds(topError.est_annual_overpay)} a year
+            </span>{" "}
+            (about{" "}
+            <span className="tnum">
+              {pounds(topError.est_monthly_overpay)} a month
+            </span>
+            ).
+          </p>
+        </section>
+      ) : null}
+    </div>
+  );
+}
+
+function P800Findings({ letter }: { letter: P800Letter }) {
+  const refund = letter.result === "overpaid";
+  return (
+    <div className="mt-6 flex flex-col gap-5">
+      <section className="border-l-2 border-accent bg-accent/10 py-3 pl-3 pr-3">
+        <p className="font-display text-[0.7rem] uppercase tracking-[0.16em] text-accent">
+          {refund ? "Refund due" : "Amount to pay"}
+        </p>
+        <p className="tnum mt-1 font-display text-3xl font-semibold text-ink">
+          {pounds(letter.amount)}
+        </p>
+        <p className="mt-1.5 text-base leading-relaxed text-ink-muted">
+          {refund
+            ? `HMRC took more tax than you owed for ${letter.tax_year}, so you're owed this back.`
+            : `You paid less tax than you owed for ${letter.tax_year}.`}
+        </p>
+      </section>
+
+      <section>
+        <p className="font-display text-[0.7rem] uppercase tracking-[0.16em] text-ink-faint">
+          The calculation
+        </p>
+        <dl className="mt-3 flex flex-col gap-2.5 text-base">
+          <SummaryRow label="Total income" value={pounds(letter.total_income)} />
+          <SummaryRow label="Tax due" value={pounds(letter.tax_due)} />
+          <SummaryRow label="Tax paid" value={pounds(letter.tax_paid)} />
+        </dl>
+      </section>
+    </div>
+  );
+}
+
+function SummaryRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex items-baseline justify-between gap-3 border-b border-rule pb-2.5">
+      <dt className="text-ink">{label}</dt>
+      <dd className="tnum shrink-0 text-ink-muted">{value}</dd>
+    </div>
+  );
+}
+
+// Screens 6/7 — the transcript as chat bubbles. The audio-paced reveal contract
+// is preserved verbatim: only the slice of `live` that has been (or is about to
+// be) voiced is shown, with the live caret. User turns get a restrained
+// treatment (surface-sunken + an oxblood right edge), NEVER solid bg-accent
+// (§1.9); the agent gets a hairline-ruled raised bubble.
+function TranscriptBubbles({
   items,
   live,
   revealedCount,
@@ -315,47 +675,145 @@ function TranscriptPanel({
   live: string;
   revealedCount: number;
 }) {
-  // Reveal only what's been (or is about to be) voiced. If `live` has grown
-  // past the timeline because text deltas outran audio synthesis, the tail
-  // stays hidden until the audio catches up — matching dictation cadence.
   const visible = live.slice(0, Math.min(revealedCount, live.length));
-  const empty = items.length === 0 && visible === "";
   return (
-    <div className="min-h-40 border-t border-rule-strong pt-4">
-      <p className="font-display text-[0.7rem] uppercase tracking-[0.16em] text-ink-faint">
-        Transcript
-      </p>
-      {empty ? (
-        <p className="mt-4 max-w-[48ch] text-base text-ink-faint">
-          Tap “Ask about this letter” and speak, or pick a question above. The
-          conversation appears here as it happens.
-        </p>
-      ) : (
-        <div className="mt-4 flex flex-col gap-3">
-          {items.map((turn, i) => (
-            <p
-              key={i}
-              className={
-                turn.role === "user"
-                  ? "max-w-[40ch] self-start text-base text-ink-muted"
-                  : "max-w-[44ch] self-end text-right text-base text-ink"
-              }
-            >
-              {turn.text}
-            </p>
-          ))}
-          {visible !== "" ? (
-            <p className="max-w-[44ch] self-end text-right text-base text-ink">
-              {visible}
-              <span
-                aria-hidden
-                className="ml-0.5 inline-block w-[0.4ch] animate-pulse bg-accent align-baseline"
-                style={{ height: "1em" }}
-              />
-            </p>
-          ) : null}
-        </div>
+    <div className="flex flex-col gap-2.5">
+      {items.map((turn, i) =>
+        turn.role === "system" ? (
+          <SystemDivider key={i} text={turn.text} />
+        ) : (
+          <Bubble key={i} role={turn.role}>
+            {turn.text}
+          </Bubble>
+        ),
       )}
+      {visible !== "" ? (
+        <Bubble role="agent">
+          {visible}
+          <span
+            aria-hidden
+            className="ml-0.5 inline-block w-[0.4ch] animate-pulse bg-accent align-baseline"
+            style={{ height: "1em" }}
+          />
+        </Bubble>
+      ) : null}
+    </div>
+  );
+}
+
+function Bubble({
+  role,
+  children,
+}: {
+  role: "user" | "agent";
+  children: ReactNode;
+}) {
+  const base =
+    "max-w-[85%] rounded-tactile px-3.5 py-2.5 text-base leading-relaxed";
+  return role === "user" ? (
+    <p className={`${base} self-end border-r-2 border-accent bg-surface-sunken text-ink`}>
+      {children}
+    </p>
+  ) : (
+    <p className={`${base} self-start border border-rule bg-surface-raised text-ink`}>
+      {children}
+    </p>
+  );
+}
+
+// A non-spoken boundary in the thread (the one-time Welsh switch beat, §4.9):
+// a centred hairline divider with an uppercase label — editorial, not a bubble.
+function SystemDivider({ text }: { text: string }) {
+  return (
+    <div role="separator" className="my-1 flex items-center gap-3">
+      <span aria-hidden className="h-px flex-1 bg-rule" />
+      <span className="font-display text-[0.7rem] uppercase tracking-[0.16em] text-ink-faint">
+        {text}
+      </span>
+      <span aria-hidden className="h-px flex-1 bg-rule" />
+    </div>
+  );
+}
+
+// Screen 8 — the four canned prompts reshaped from wrap-pills into ≥44px
+// full-width list rows. They feed the live session via sendUserMessage (askChip);
+// the disabled gate / askChip's !live early-return are kept intact (§5.1).
+function ResponseRows({
+  onAsk,
+  disabled,
+}: {
+  onAsk: (text: string) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="shrink-0 border-t border-rule px-4 py-3">
+      <p className="mb-2 font-display text-[0.7rem] uppercase tracking-[0.16em] text-ink-faint">
+        Suggested questions
+      </p>
+      <ul className="flex flex-col gap-2">
+        {PROMPT_CHIPS.map((chip) => (
+          <li key={chip}>
+            <button
+              type="button"
+              onClick={() => onAsk(chip)}
+              disabled={disabled}
+              className="flex min-h-11 w-full items-center justify-between gap-3 rounded-tactile border border-rule bg-surface-raised px-3.5 text-left text-base text-ink transition-colors duration-150 ease-out hover:border-rule-strong active:bg-surface-sunken focus-visible:border-rule-strong disabled:opacity-40"
+            >
+              <span>{chip}</span>
+              <IconChevron className="size-4 shrink-0 text-ink-faint" />
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// Screen 5 — the speaking/listening orb. Animated off the SDK `mode` axis (NOT
+// `status`, which is `connected` for both, and NOT invented from transcript
+// deltas): an oxblood core that pings while the agent speaks, an ink core with a
+// faint breathing ring while listening, faint while connecting. Restrained,
+// tokens only.
+function OrbDock({
+  status,
+  mode,
+  language,
+}: {
+  status: string;
+  mode: "speaking" | "listening";
+  language: Language;
+}) {
+  const connected = status === "connected";
+  const speaking = connected && mode === "speaking";
+  return (
+    <div className="flex shrink-0 flex-col items-center gap-2 px-5 py-4">
+      <div className="relative grid size-14 place-items-center">
+        <span
+          aria-hidden
+          className={`absolute size-14 rounded-full ${
+            speaking
+              ? "animate-ping bg-accent/20"
+              : connected
+                ? "animate-pulse bg-ink/5"
+                : ""
+          }`}
+        />
+        <span
+          aria-hidden
+          className={`relative grid size-12 place-items-center rounded-full transition-colors duration-200 ease-out ${
+            !connected
+              ? "bg-ink-faint"
+              : speaking
+                ? "bg-accent"
+                : "bg-surface-invert"
+          }`}
+        >
+          <IconMic className="size-5 text-ink-invert" />
+        </span>
+      </div>
+      <p aria-live="polite" className="font-display text-sm text-ink-muted">
+        {voiceStatusLabel(status, mode, language)}
+      </p>
     </div>
   );
 }
@@ -365,29 +823,74 @@ function CitationChips({ sources }: { sources: Source[] }) {
   // (verified against @elevenlabs/types). We render citation chips from the
   // letter's own CodeLine → GOV.UK anchors, which is the authoritative mapping
   // of each line to the page that explains it.
-  // TODO: confirm source_attribution field — switch to live per-message
-  //       citations if a future SDK release surfaces them on the message object.
   const seen = new Set<string>();
   const unique = sources.filter((s) =>
     seen.has(s.anchor) ? false : (seen.add(s.anchor), true),
   );
   return (
-    <div className="border-t border-rule pt-4">
+    <div className="mt-5 border-t border-rule pt-4">
       <p className="font-display text-[0.7rem] uppercase tracking-[0.16em] text-ink-faint">
         Official guidance
       </p>
-      <div className="mt-2 flex flex-wrap gap-2">
+      <div className="mt-2.5 flex flex-col gap-2">
         {unique.map((s) => (
           <a
             key={s.anchor}
             href={`https://www.gov.uk/${s.anchor}`}
             target="_blank"
             rel="noreferrer"
-            className="rounded-tactile border border-rule px-3 py-1 text-sm text-ink-muted transition-opacity duration-150 ease-out hover:border-accent hover:text-accent"
+            className="flex min-h-11 items-center justify-between gap-3 rounded-tactile border border-rule bg-surface-raised px-3.5 text-base text-ink-muted transition-colors duration-150 ease-out hover:border-accent hover:text-accent active:bg-surface-sunken"
           >
-            GOV.UK — {s.label}
+            <span>GOV.UK — {s.label}</span>
+            <IconExternal className="size-4 shrink-0 text-ink-faint" />
           </a>
         ))}
+      </div>
+    </div>
+  );
+}
+
+// Screen 9 — the one real P2 action, gated exactly as before
+// (suspectedErrors.length > 0 && agentHasReplied). Same-window Link into the
+// GOV.UK form — this IS the finish-flow entry (leaving unmounts the session,
+// which is correct). No invented amounts/deadlines: only the audited £/yr · £/mo.
+function ActionCard({
+  error,
+  letterId,
+}: {
+  error: SuspectedError;
+  letterId: string;
+}) {
+  return (
+    <div className="mt-5 border-t border-rule-strong pt-5">
+      <p className="font-display text-[0.7rem] uppercase tracking-[0.16em] text-ink-faint">
+        What you need to do
+      </p>
+      <div className="mt-3 rounded-tactile border border-rule bg-surface-raised p-4">
+        <h2 className="font-display text-lg font-semibold tracking-tight text-ink">
+          {error.line_label}
+        </h2>
+        <p className="mt-1.5 text-base leading-relaxed text-ink-muted">
+          {error.reason}
+        </p>
+        <p className="mt-3 text-base text-ink">
+          Fixing this could save you about{" "}
+          <span className="tnum font-display font-semibold">
+            {pounds(error.est_annual_overpay)} a year
+          </span>{" "}
+          (about{" "}
+          <span className="tnum">
+            {pounds(error.est_monthly_overpay)} a month
+          </span>
+          ).
+        </p>
+        <Link
+          href={`/actions/update-company-car/${letterId}`}
+          className="mt-4 flex min-h-11 w-full items-center justify-center gap-2 rounded-tactile bg-accent px-4 font-display text-base font-medium text-ink-invert transition-opacity duration-150 ease-out hover:opacity-90 active:opacity-80"
+        >
+          Fix this on the government portal
+          <IconArrow className="size-4" />
+        </Link>
       </div>
     </div>
   );
@@ -416,12 +919,16 @@ function readTarget(parameters: Record<string, unknown>): string | null {
   return typeof target === "string" ? target : null;
 }
 
-function statusLabel(status: string, language: Language): string {
+function voiceStatusLabel(
+  status: string,
+  mode: "speaking" | "listening",
+  language: Language,
+): string {
   if (status === "connecting") return "Connecting…";
-  if (status === "connected")
-    return language === "cy" ? "Live · Cymraeg" : "Live";
   if (status === "error") return "Connection error";
-  return "Not connected";
+  if (status !== "connected") return "Not connected";
+  const cy = language === "cy" ? " · Cymraeg" : "";
+  return (mode === "speaking" ? "Marginalia is speaking" : "Listening") + cy;
 }
 
 function messageOf(e: unknown): string {
@@ -430,4 +937,160 @@ function messageOf(e: unknown): string {
   }
   if (e instanceof Error) return e.message;
   return "Something went wrong starting the conversation.";
+}
+
+type IconProps = { className?: string };
+
+function IconCheck({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden
+      className={className ?? "size-4"}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3.5 8.5 6.5 11.5 12.5 4.5" />
+    </svg>
+  );
+}
+
+function IconChevron({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden
+      className={className ?? "size-4"}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m6 3.5 5 4.5-5 4.5" />
+    </svg>
+  );
+}
+
+function IconArrow({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden
+      className={className ?? "size-4"}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 8h10M9 4l4 4-4 4" />
+    </svg>
+  );
+}
+
+function IconClose({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden
+      className={className ?? "size-4"}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="m4 4 8 8M12 4l-8 8" />
+    </svg>
+  );
+}
+
+function IconSend({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden
+      className={className ?? "size-4"}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M8 13V3M4 7l4-4 4 4" />
+    </svg>
+  );
+}
+
+function IconMic({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden
+      className={className ?? "size-4"}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.4}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="6" y="2" width="4" height="7" rx="2" />
+      <path d="M4 7.5a4 4 0 0 0 8 0M8 11.5V14M6 14h4" />
+    </svg>
+  );
+}
+
+function IconExternal({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden
+      className={className ?? "size-4"}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M9 3h4v4M13 3 7 9M11 9.5V12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h2.5" />
+    </svg>
+  );
+}
+
+function IconLock({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden
+      className={className ?? "size-4"}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.4}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="3.5" y="7" width="9" height="6.5" rx="1.2" />
+      <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
+    </svg>
+  );
+}
+
+function IconSpinner({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden
+      className={className ?? "size-4"}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.7}
+      strokeLinecap="round"
+    >
+      <path d="M8 2a6 6 0 1 1-6 6" />
+    </svg>
+  );
 }

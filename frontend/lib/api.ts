@@ -96,34 +96,3 @@ export async function getLetter(id: string): Promise<Letter | null> {
   if (!res.ok) throw new Error(`getLetter ${id} failed: ${res.status}`);
   return letterSchema.parse(await res.json());
 }
-
-const scanEventAggregateSchema = z.object({
-  letter_section: z.string(),
-  count: z.number().int(),
-  pct: z.number(),
-});
-
-const languageCountSchema = z.object({
-  language: z.string(),
-  count: z.number().int(),
-  pct: z.number(),
-});
-
-const scanEventDashboardSchema = z.object({
-  sections: z.array(scanEventAggregateSchema),
-  languages: z.array(languageCountSchema),
-  answered_count: z.number().int(), // resolved = true — answered without a phone call
-  total_count: z.number().int(),
-});
-
-export type ScanEventAggregate = z.infer<typeof scanEventAggregateSchema>;
-export type LanguageCount = z.infer<typeof languageCountSchema>;
-export type ScanEventDashboard = z.infer<typeof scanEventDashboardSchema>;
-
-export async function getScanEventDashboard(): Promise<ScanEventDashboard> {
-  const res = await fetch(`${env.NEXT_PUBLIC_API_URL}/scan-events/aggregates`, {
-    cache: "no-store",
-  });
-  if (!res.ok) throw new Error(`getScanEventDashboard failed: ${res.status}`);
-  return scanEventDashboardSchema.parse(await res.json());
-}

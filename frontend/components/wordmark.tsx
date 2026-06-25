@@ -3,9 +3,9 @@ import Link from "next/link";
 
 import logo from "@/app/logo.png";
 
-// The brand lockup — the engraved Marginalia monogram beside the wordmark. Serves
-// as the masthead on the landing and dashboard, and as the home affordance on
-// sub-pages. `sm` is the compact variant for slim headers and footers.
+// The brand lockup — the engraved Marginalia monogram beside the wordmark. Used
+// as a home affordance on sub-pages (e.g. the 404); `href="/"` resolves to the
+// citizen home. `sm` is the compact variant for slim headers and footers.
 export function Wordmark({ size = "md" }: { size?: "sm" | "md" }) {
   const dim = size === "md" ? 32 : 24;
   return (

@@ -18,12 +18,19 @@ export default async function ConfirmationPage({
           <div className="govuk-header__logo">
             <span className="govuk-header__logotype-text">GOV.UK</span>
           </div>
-          <div className="govuk-header__content">
+          <div className="govuk-header__content flex items-center justify-between gap-4">
             <Link
               href="/"
               className="govuk-header__link govuk-header__service-name"
             >
               HMRC — Personal Tax Account
+            </Link>
+            <Link
+              href="/all-set"
+              aria-label="Close"
+              className="govuk-header__link inline-flex h-11 w-11 shrink-0 items-center justify-center text-2xl leading-none"
+            >
+              &times;
             </Link>
           </div>
         </div>
@@ -53,8 +60,8 @@ export default async function ConfirmationPage({
               </p>
 
               <p className="govuk-body">
-                <Link href="/dashboard" className="govuk-link">
-                  Return to the dashboard
+                <Link href="/" className="govuk-link">
+                  Return to home
                 </Link>
               </p>
             </div>

@@ -4,7 +4,7 @@ import { Wordmark } from "@/components/wordmark";
 
 export default function NotFound() {
   return (
-    <main className="mx-auto flex min-h-screen max-w-5xl flex-col px-6 sm:px-10">
+    <main className="mx-auto flex min-h-dvh max-w-5xl flex-col px-6 sm:px-10">
       <header className="border-b border-rule-strong py-6">
         <Wordmark size="sm" />
       </header>
@@ -18,7 +18,7 @@ export default function NotFound() {
         <p className="mt-6 max-w-[50ch] text-xl text-ink-muted">
           The page you asked for doesn&rsquo;t exist.{" "}
           <Link href="/" className="text-accent">
-            Back to the index
+            Back to home
           </Link>
           .
         </p>

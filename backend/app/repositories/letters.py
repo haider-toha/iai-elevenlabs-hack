@@ -7,12 +7,7 @@ import asyncpg
 from asyncpg.pool import PoolConnectionProxy
 
 from app.models.letters import LetterType, P2Letter, P800Letter
-from app.models.scan_events import (
-    LanguageCount,
-    ScanEventAggregate,
-    ScanEventCreate,
-    ScanEventDashboard,
-)
+from app.models.scan_events import ScanEventCreate
 
 
 async def get_letter(
@@ -41,31 +36,4 @@ async def log_scan_event(
         event.language,
         event.resolved,
         event.session_seconds,
-    )
-
-
-async def get_scan_event_dashboard(
-    conn: PoolConnectionProxy[asyncpg.Record],
-) -> ScanEventDashboard:
-    section_rows = await conn.fetch(
-        "select letter_section, count(*) as count,"
-        " round(count(*) * 100.0 / sum(count(*)) over (), 1) as pct"
-        " from scan_events group by letter_section order by count desc"
-    )
-    language_rows = await conn.fetch(
-        "select language, count(*) as count,"
-        " round(count(*) * 100.0 / sum(count(*)) over (), 1) as pct"
-        " from scan_events group by language order by count desc"
-    )
-    totals = await conn.fetchrow(
-        "select count(*) filter (where resolved) as answered_count,"
-        " count(*) as total_count from scan_events"
-    )
-    # scan_events is always seeded, so the totals row is never None.
-    assert totals is not None
-    return ScanEventDashboard(
-        sections=[ScanEventAggregate.model_validate(dict(row)) for row in section_rows],
-        languages=[LanguageCount.model_validate(dict(row)) for row in language_rows],
-        answered_count=totals["answered_count"],
-        total_count=totals["total_count"],
     )
