@@ -1,0 +1,40 @@
+# Local Supabase configuration. After editing, run `supabase stop && supabase start`.
+# Distinguishes this project from others on the same host.
+project_id = "i_ai_hackathon"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[db]
+port = 54322
+shadow_port = 54320
+# Match this to the cloud project's Postgres major version.
+major_version = 17
+
+[db.pooler]
+enabled = false
+port = 54329
+pool_mode = "transaction"
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[studio]
+enabled = true
+port = 54323
+
+[inbucket]
+enabled = true
+port = 54324
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["http://localhost:3000"]
+jwt_expiry = 3600
+enable_signup = true

@@ -1,0 +1,75 @@
+@import "tailwindcss";
+
+/* Design tokens — Tailwind v4 reads these to generate utilities
+   (bg-surface, text-ink-muted, border-rule, font-display, rounded-tactile…).
+   `inline` is required because --font-display points at a next/font runtime
+   variable; without it the font utilities resolve at :root and fall back. */
+@theme inline {
+  --font-display: var(--font-familjen), "Helvetica Neue", sans-serif;
+  --font-body: var(--font-newsreader), Georgia, serif;
+
+  /* Surfaces — cool bone paper, never pure white */
+  --color-surface: #f1f0ea;
+  --color-surface-raised: #f8f7f2;
+  --color-surface-sunken: #e8e6dd;
+  --color-surface-invert: #1b1a17;
+
+  /* Ink — warm soft black, never pure #000 */
+  --color-ink: #1c1b18;
+  --color-ink-muted: #565049;
+  --color-ink-faint: #8c857a;
+  --color-ink-invert: #f1f0ea;
+
+  /* Accent — a single oxblood, used like a proof mark */
+  --color-accent: #9c3b2e;
+  --color-accent-hover: #7e2f24;
+  --color-accent-soft: #e9d6cf;
+
+  /* Status — earthy, never neon */
+  --color-positive: #4d5e3c;
+  --color-warning: #b07a2c;
+
+  /* Lines do the structural work, not shadows */
+  --color-rule: #d6d0c4;
+  --color-rule-strong: #2a2823;
+
+  /* The only radius that exists */
+  --radius-tactile: 3px;
+}
+
+@layer base {
+  *,
+  ::before,
+  ::after {
+    border-color: var(--color-rule);
+  }
+  html {
+    background-color: var(--color-surface);
+    color: var(--color-ink);
+  }
+  body {
+    font-family: var(--font-body);
+    font-size: 1.0625rem;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1,
+  h2,
+  h3,
+  h4 {
+    font-family: var(--font-display);
+    font-weight: 600;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+  ::selection {
+    background-color: var(--color-accent-soft);
+    color: var(--color-ink);
+  }
+}
+
+/* Tabular figures without a monospace font */
+.tnum {
+  font-feature-settings: "tnum" 1;
+}
