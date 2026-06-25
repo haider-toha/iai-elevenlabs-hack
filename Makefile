@@ -23,7 +23,7 @@ help: ## Show this help
 
 setup: install ## Install deps and create .env files from examples
 	cp -n $(BACKEND)/.env.example $(BACKEND)/.env || true
-	cp -n $(FRONTEND)/.env.example $(FRONTEND)/.env.local || true
+	cp -n $(FRONTEND)/.env.example $(FRONTEND)/.env || true
 
 install: install-frontend install-backend ## Install all dependencies
 

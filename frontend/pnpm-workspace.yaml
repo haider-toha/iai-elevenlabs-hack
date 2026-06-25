@@ -1,5 +1,8 @@
 allowBuilds:
+  esbuild: true
   sharp: true
   unrs-resolver: true
 minimumReleaseAgeExclude:
   - "@types/node@26.0.1"
+  - '@elevenlabs/client@1.13.0'
+  - '@elevenlabs/react@1.8.0'

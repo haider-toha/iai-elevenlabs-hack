@@ -5,6 +5,8 @@ frontend/out/
 frontend/build/
 frontend/next-env.d.ts
 frontend/*.tsbuildinfo
+# Vendored from govuk-frontend by scripts/copy-govuk-assets.ts (predev/prebuild)
+frontend/public/vendor/
 
 # Python
 __pycache__/
