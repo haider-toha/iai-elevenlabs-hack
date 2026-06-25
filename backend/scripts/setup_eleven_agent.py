@@ -200,12 +200,25 @@ def desired_config(
         },
         "tts": {
             "voice_id": os.environ["XI_VOICE_ID_ENGLISH"],
-            # English agents must use turbo/flash v2 (not the multilingual v2.5),
-            # per the API; matches the plan's "Flash v2 for low latency".
-            "model_id": "eleven_flash_v2",
+            # v3 Conversational is the one real-time ConvAI model that supports
+            # Welsh (cy), so a single agent serves both the English session and the
+            # live Welsh switch. flash/turbo v2 and v2.5 reject "cy"; plain
+            # eleven_v3 is expressive TTS only (not allowed for agents). Trade-off:
+            # slightly higher latency than flash v2 — accepted for bilingual voice.
+            "model_id": "eleven_v3_conversational",
             "pronunciation_dictionary_locators": [dict_locator],
         },
         "asr": {"keywords": STT_KEYTERMS},
+        # Welsh registered as a switchable language — valid now the model is
+        # v3_conversational. The Welsh beat (convai-leaf restartInWelsh) overrides
+        # language -> "cy" and this voice at session start.
+        "language_presets": {
+            "cy": {
+                "overrides": {
+                    "tts": {"voice_id": os.environ["XI_VOICE_ID_WELSH"]},
+                },
+            },
+        },
     }
     platform_settings: dict[str, object] = {
         "overrides": {

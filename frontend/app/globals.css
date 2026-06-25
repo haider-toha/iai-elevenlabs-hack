@@ -1,40 +1,58 @@
 @import "tailwindcss";
 
-/* Design tokens — Tailwind v4 reads these to generate utilities
-   (bg-surface, text-ink-muted, border-rule, font-display, rounded-tactile…).
-   `inline` is required because --font-display points at a next/font runtime
-   variable; without it the font utilities resolve at :root and fall back. */
 @theme inline {
-  --font-display: var(--font-familjen), "Helvetica Neue", sans-serif;
-  --font-body: var(--font-newsreader), Georgia, serif;
+  /* Fonts — one neo-grotesque for display AND body (Hanken Grotesk) */
+  --font-display: var(--font-hanken), "Helvetica Neue", sans-serif;
+  --font-body: var(--font-hanken), "Helvetica Neue", sans-serif;
 
-  /* Surfaces — cool bone paper, never pure white */
-  --color-surface: #f1f0ea;
-  --color-surface-raised: #f8f7f2;
-  --color-surface-sunken: #e8e6dd;
-  --color-surface-invert: #1b1a17;
+  /* Brand primitives */
+  --color-navy: #0d1b3d;
+  --color-indigo: #2d51fb;
+  --color-lavender: #ebeffd;
+  --color-slate: #3c4b63;
+  --color-grey: #909db2;
+  --color-mist: #f2f4f7;
+  --color-white: #ffffff;
 
-  /* Ink — warm soft black, never pure #000 */
-  --color-ink: #1c1b18;
-  --color-ink-muted: #565049;
-  --color-ink-faint: #8c857a;
-  --color-ink-invert: #f1f0ea;
+  /* Status */
+  --color-success: #21a24c;
+  --color-info: #2566ec;
+  --color-warning: #d4780f;
+  --color-error: #d62d28;
 
-  /* Accent — a single oxblood, used like a proof mark */
-  --color-accent: #9c3b2e;
-  --color-accent-hover: #7e2f24;
-  --color-accent-soft: #e9d6cf;
+  /* Surfaces (repointed) */
+  --color-surface: #ffffff;
+  --color-surface-raised: #f2f4f7;
+  --color-surface-sunken: #ebeffd;
+  --color-surface-invert: #0d1b3d;
 
-  /* Status — earthy, never neon */
-  --color-positive: #4d5e3c;
-  --color-warning: #b07a2c;
+  /* Ink (repointed) */
+  --color-ink: #111b32;
+  --color-ink-muted: #3c4b63;
+  --color-ink-faint: #909db2;
+  --color-ink-invert: #ffffff;
 
-  /* Lines do the structural work, not shadows */
-  --color-rule: #d6d0c4;
-  --color-rule-strong: #2a2823;
+  /* Accent = Indigo primary (repointed) */
+  --color-accent: #2d51fb;
+  --color-accent-hover: #2566ec;
+  --color-accent-soft: #ebeffd;
 
-  /* The only radius that exists */
-  --radius-tactile: 3px;
+  /* Legacy status name kept for existing `bg-positive`/`text-positive` utilities */
+  --color-positive: #21a24c;
+
+  /* Rules (repointed) */
+  --color-rule: #e3e8f0; /* derived cool hairline (only non-palette hex) */
+  --color-rule-strong: #111b32;
+
+  /* Radii */
+  --radius-tactile: 12px; /* buttons, tags, chips, prompt/response rows, citation chips, icon-squares */
+  --radius-card: 16px; /* cards & sheets */
+  --radius-bubble: 16px; /* chat bubbles */
+  --radius-pill: 9999px; /* input capsule, end-X circle, all-set check circle, orb, listening dots */
+
+  /* Shadow — subtle, navy-tinted (mockup cards are shadow-defined, not ruled) */
+  --shadow-card:
+    0 1px 2px 0 rgb(13 27 61 / 0.04), 0 6px 20px -4px rgb(13 27 61 / 0.08);
 }
 
 @layer base {

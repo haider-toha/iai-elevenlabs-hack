@@ -7,7 +7,7 @@ import type { ReactNode } from "react";
 // overflow the Mac bezel). On a real phone the bezel is hidden and it's full-bleed.
 export default function PhoneLayout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-dvh bg-surface-sunken lg:grid lg:min-h-dvh lg:place-items-center lg:py-10">
+    <div className="min-h-dvh bg-mist lg:grid lg:min-h-dvh lg:place-items-center lg:py-10">
       {/* device — owns height: min-h-dvh on a phone (keeps the address-bar-jump
           fix), a fixed 390×852 on the Mac; the lg-only bezel is sanctioned
           device chrome (§3.5), the rounded corners here are the phone frame, not

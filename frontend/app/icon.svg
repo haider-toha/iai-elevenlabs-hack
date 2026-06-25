@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Marginalia">
-  <rect width="32" height="32" fill="#f1f0ea" />
-  <rect x="2.5" y="2.5" width="27" height="27" fill="none" stroke="#2b3a6b" stroke-width="1.25" />
-  <path d="M7 24 V9 L16 18.5 L25 9 V24" fill="none" stroke="#2b3a6b" stroke-width="3.2" stroke-linecap="butt" stroke-linejoin="round" />
+  <rect width="32" height="32" fill="#ffffff" />
+  <rect x="2.5" y="2.5" width="27" height="27" fill="none" stroke="#0d1b3d" stroke-width="1.25" />
+  <path d="M7 24 V9 L16 18.5 L25 9 V24" fill="none" stroke="#0d1b3d" stroke-width="3.2" stroke-linecap="butt" stroke-linejoin="round" />
 </svg>

@@ -22,9 +22,22 @@ export function SaveChatStub() {
     <button
       type="button"
       onClick={() => setSaved(true)}
-      className="w-full py-3 font-display text-sm font-medium text-ink-muted underline decoration-rule-strong underline-offset-4 transition duration-150 ease-out hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:opacity-70"
+      className="flex w-full items-center justify-center gap-2 rounded-tactile border border-rule bg-white px-5 py-3.5 font-display text-sm font-medium text-navy transition duration-150 ease-out hover:bg-mist focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:opacity-70"
     >
       Save this chat
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={1.75}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+        className="size-4 text-ink-faint"
+      >
+        <path d="M7 3h7l4 4v13a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
+        <path d="M14 3v4h4" />
+      </svg>
     </button>
   );
 }

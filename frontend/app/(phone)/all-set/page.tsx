@@ -10,23 +10,25 @@ export default function AllSetPage() {
   return (
     <main className="flex min-h-0 flex-1 flex-col px-6">
       <div className="flex flex-1 flex-col justify-center">
-        <svg
-          viewBox="0 0 48 48"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={2.5}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          aria-hidden
-          className="h-14 w-14 text-accent"
-        >
-          <path d="M10 25.5 L20 35 L38.5 13" />
-        </svg>
+        <div className="flex size-16 shrink-0 items-center justify-center self-center rounded-pill bg-accent">
+          <svg
+            viewBox="0 0 48 48"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={3}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden
+            className="size-8 text-ink-invert"
+          >
+            <path d="M10 25.5 L20 35 L38.5 13" />
+          </svg>
+        </div>
 
-        <h1 className="mt-8 font-display text-5xl tracking-tight">
+        <h1 className="mt-8 text-center font-display text-5xl tracking-tight">
           You&rsquo;re all set.
         </h1>
-        <p className="mt-4 max-w-[34ch] text-lg text-ink-muted">
+        <p className="mx-auto mt-4 max-w-[34ch] text-center text-lg text-ink-muted">
           You can come back anytime if you have more questions.
         </p>
       </div>

@@ -263,7 +263,10 @@ function ConvaiSession({ letter, letterBlock, letterBlockWelsh }: LeafProps) {
       // the switch reads as a deliberate handover, not a dropped/duplicated turn.
       // It sits between the English turns above and the Welsh ones the restarted
       // session will append below.
-      setTranscript((t) => [...t, { role: "system", text: "Switching to Welsh" }]);
+      setTranscript((t) => [
+        ...t,
+        { role: "system", text: "Switching to Welsh" },
+      ]);
       startSession({
         signedUrl,
         overrides: {
@@ -284,7 +287,7 @@ function ConvaiSession({ letter, letterBlock, letterBlockWelsh }: LeafProps) {
   // `target`, e.g. "cy"). v1.8.0 registers client tools with the provider; the
   // handler reflects the latest closure, so it can call restartInWelsh above.
   useConversationClientTool<ConvaiTools>("switch_language", (params) => {
-    if (readTarget(params) === "cy") void restartInWelsh();
+    if (targetIsWelsh(readTarget(params))) void restartInWelsh();
   });
 
   // The sacred start chain (§1.5): getUserMedia → fetchSignedUrl → startSession
@@ -388,7 +391,7 @@ function ConvaiSession({ letter, letterBlock, letterBlockWelsh }: LeafProps) {
             <div className="flex items-center gap-2">
               <form
                 onSubmit={onSubmitDraft}
-                className="flex min-w-0 flex-1 items-center rounded-tactile border border-rule bg-surface-raised transition-colors duration-150 ease-out focus-within:border-rule-strong"
+                className="flex min-w-0 flex-1 items-center rounded-pill border border-transparent bg-mist transition-colors duration-150 ease-out focus-within:border-rule-strong"
               >
                 <input
                   ref={inputRef}
@@ -413,7 +416,7 @@ function ConvaiSession({ letter, letterBlock, letterBlockWelsh }: LeafProps) {
                 type="button"
                 onClick={endConversation}
                 aria-label="End conversation"
-                className="grid size-11 shrink-0 place-items-center rounded-full border border-rule-strong text-ink transition-colors duration-150 ease-out active:bg-surface-sunken"
+                className="grid size-11 shrink-0 place-items-center rounded-full bg-surface-invert text-ink-invert transition-opacity duration-150 ease-out active:opacity-80"
               >
                 <IconClose className="size-4" />
               </button>
@@ -455,14 +458,14 @@ function PreparingView() {
               key={step}
               style={{ transitionDelay: `${i * 280}ms` }}
               className={`flex items-center gap-3 transition duration-200 ease-out ${
-                revealed ? "translate-y-0 opacity-100" : "translate-y-1 opacity-0"
+                revealed
+                  ? "translate-y-0 opacity-100"
+                  : "translate-y-1 opacity-0"
               }`}
             >
               <span
                 aria-hidden
-                className={`grid size-5 shrink-0 place-items-center ${
-                  last ? "text-accent" : "text-positive"
-                }`}
+                className="grid size-5 shrink-0 place-items-center text-accent"
               >
                 {last ? (
                   <IconSpinner className="size-4 animate-spin" />
@@ -476,7 +479,7 @@ function PreparingView() {
         })}
       </ul>
 
-      <div className="flex items-start gap-3 rounded-tactile border border-rule bg-surface-raised px-4 py-3">
+      <div className="flex items-start gap-3 rounded-card bg-mist px-4 py-3 shadow-card">
         <IconLock className="mt-0.5 size-4 shrink-0 text-ink-faint" />
         <div>
           <p className="font-display text-sm font-medium text-ink">
@@ -510,8 +513,8 @@ function SummaryView({
     <>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-6">
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <span className="inline-flex items-center gap-1.5 rounded-tactile border border-rule bg-surface-raised px-2 py-1 font-display text-xs font-medium text-ink-muted">
-            <IconCheck className="size-3.5 text-positive" />
+          <span className="inline-flex items-center gap-1.5 rounded-tactile bg-lavender px-2 py-1 font-display text-xs font-medium text-ink-muted">
+            <IconCheck className="size-3.5 text-accent" />
             Recognised
           </span>
           <span className="font-display text-xs uppercase tracking-[0.14em] text-ink-faint">
@@ -551,7 +554,7 @@ function SummaryView({
         <button
           type="button"
           onClick={onType}
-          className="mt-2.5 flex min-h-11 w-full items-center justify-center rounded-tactile border border-rule-strong px-5 font-display text-base font-medium text-ink transition-colors duration-150 ease-out active:bg-surface-sunken"
+          className="mt-2.5 flex min-h-11 w-full items-center justify-center rounded-tactile border border-rule bg-surface px-5 font-display text-base font-medium text-ink shadow-card transition-colors duration-150 ease-out active:bg-surface-sunken"
         >
           Type instead
         </button>
@@ -570,7 +573,10 @@ function P2Findings({ letter }: { letter: P2Letter }) {
         </p>
         <dl className="mt-3 flex flex-col gap-2.5">
           {letter.lines.map((line, i) => (
-            <div key={`${line.label}-${i}`} className="border-b border-rule pb-2.5">
+            <div
+              key={`${line.label}-${i}`}
+              className="border-b border-rule pb-2.5"
+            >
               <div className="flex items-baseline justify-between gap-3">
                 <dt className="font-display text-base font-medium text-ink">
                   {line.label}
@@ -596,7 +602,7 @@ function P2Findings({ letter }: { letter: P2Letter }) {
       </section>
 
       {topError !== undefined ? (
-        <section className="border-l-2 border-accent bg-accent/10 py-3 pl-3 pr-3">
+        <section className="rounded-card border-l-2 border-accent bg-accent/10 py-3 pl-3 pr-3">
           <p className="font-display text-[0.7rem] uppercase tracking-[0.16em] text-accent">
             Worth checking
           </p>
@@ -624,7 +630,7 @@ function P800Findings({ letter }: { letter: P800Letter }) {
   const refund = letter.result === "overpaid";
   return (
     <div className="mt-6 flex flex-col gap-5">
-      <section className="border-l-2 border-accent bg-accent/10 py-3 pl-3 pr-3">
+      <section className="rounded-card border-l-2 border-accent bg-accent/10 py-3 pl-3 pr-3">
         <p className="font-display text-[0.7rem] uppercase tracking-[0.16em] text-accent">
           {refund ? "Refund due" : "Amount to pay"}
         </p>
@@ -643,7 +649,10 @@ function P800Findings({ letter }: { letter: P800Letter }) {
           The calculation
         </p>
         <dl className="mt-3 flex flex-col gap-2.5 text-base">
-          <SummaryRow label="Total income" value={pounds(letter.total_income)} />
+          <SummaryRow
+            label="Total income"
+            value={pounds(letter.total_income)}
+          />
           <SummaryRow label="Tax due" value={pounds(letter.tax_due)} />
           <SummaryRow label="Tax paid" value={pounds(letter.tax_paid)} />
         </dl>
@@ -663,9 +672,8 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 
 // Screens 6/7 — the transcript as chat bubbles. The audio-paced reveal contract
 // is preserved verbatim: only the slice of `live` that has been (or is about to
-// be) voiced is shown, with the live caret. User turns get a restrained
-// treatment (surface-sunken + an oxblood right edge), NEVER solid bg-accent
-// (§1.9); the agent gets a hairline-ruled raised bubble.
+// be) voiced is shown, with the live caret. User turns get a pale lavender
+// treatment, NEVER solid bg-accent (§1.9); the agent gets a mist bubble.
 function TranscriptBubbles({
   items,
   live,
@@ -677,7 +685,7 @@ function TranscriptBubbles({
 }) {
   const visible = live.slice(0, Math.min(revealedCount, live.length));
   return (
-    <div className="flex flex-col gap-2.5">
+    <div className="flex flex-col gap-3">
       {items.map((turn, i) =>
         turn.role === "system" ? (
           <SystemDivider key={i} text={turn.text} />
@@ -708,16 +716,11 @@ function Bubble({
   role: "user" | "agent";
   children: ReactNode;
 }) {
-  const base =
-    "max-w-[85%] rounded-tactile px-3.5 py-2.5 text-base leading-relaxed";
+  const base = "max-w-[85%] rounded-bubble px-4 py-3 text-base leading-relaxed";
   return role === "user" ? (
-    <p className={`${base} self-end border-r-2 border-accent bg-surface-sunken text-ink`}>
-      {children}
-    </p>
+    <p className={`${base} self-end bg-lavender text-ink`}>{children}</p>
   ) : (
-    <p className={`${base} self-start border border-rule bg-surface-raised text-ink`}>
-      {children}
-    </p>
+    <p className={`${base} self-start bg-mist text-ink`}>{children}</p>
   );
 }
 
@@ -757,9 +760,17 @@ function ResponseRows({
               type="button"
               onClick={() => onAsk(chip)}
               disabled={disabled}
-              className="flex min-h-11 w-full items-center justify-between gap-3 rounded-tactile border border-rule bg-surface-raised px-3.5 text-left text-base text-ink transition-colors duration-150 ease-out hover:border-rule-strong active:bg-surface-sunken focus-visible:border-rule-strong disabled:opacity-40"
+              className="flex min-h-11 w-full items-center justify-between gap-3 rounded-card bg-mist px-3 py-2 text-left text-base text-ink transition duration-150 ease-out hover:shadow-card active:bg-lavender focus-visible:shadow-card disabled:opacity-40"
             >
-              <span>{chip}</span>
+              <span className="flex min-w-0 items-center gap-3">
+                <span
+                  aria-hidden
+                  className="grid size-8 shrink-0 place-items-center rounded-tactile bg-lavender text-ink"
+                >
+                  <IconChat className="size-4" />
+                </span>
+                <span className="min-w-0">{chip}</span>
+              </span>
               <IconChevron className="size-4 shrink-0 text-ink-faint" />
             </button>
           </li>
@@ -771,9 +782,7 @@ function ResponseRows({
 
 // Screen 5 — the speaking/listening orb. Animated off the SDK `mode` axis (NOT
 // `status`, which is `connected` for both, and NOT invented from transcript
-// deltas): an oxblood core that pings while the agent speaks, an ink core with a
-// faint breathing ring while listening, faint while connecting. Restrained,
-// tokens only.
+// deltas). It must read as a soft, morphing sphere, never a hard pulsing disc.
 function OrbDock({
   status,
   mode,
@@ -785,32 +794,61 @@ function OrbDock({
 }) {
   const connected = status === "connected";
   const speaking = connected && mode === "speaking";
+  // Blue→violet sphere, sanctioned inline hex; the transparent stop sits well
+  // inside the box so the rim feathers out instead of cutting to a hard circle.
+  const sphere =
+    "radial-gradient(circle at 38% 32%, #ffffff 0%, #6e8bf7 24%, #2d51fb 52%, #5b47e0 70%, rgba(235,239,253,0) 92%)";
+  // Three offset, blurred layers share this size/opacity treatment; the morph
+  // comes from their staggered phase + positions, not a concentric throb.
+  const blobState = !connected
+    ? "size-12 opacity-40 saturate-50"
+    : speaking
+      ? "size-[4.5rem] animate-pulse opacity-80 brightness-110"
+      : "size-14 animate-pulse opacity-75";
   return (
     <div className="flex shrink-0 flex-col items-center gap-2 px-5 py-4">
-      <div className="relative grid size-14 place-items-center">
+      <div className="relative grid size-20 place-items-center">
         <span
           aria-hidden
-          className={`absolute size-14 rounded-full ${
-            speaking
-              ? "animate-ping bg-accent/20"
-              : connected
-                ? "animate-pulse bg-ink/5"
-                : ""
+          style={{
+            background: "radial-gradient(circle, #2d51fb 0%, transparent 70%)",
+          }}
+          className={`absolute rounded-pill blur-2xl transition-all duration-500 ease-out ${
+            !connected
+              ? "size-16 opacity-20"
+              : speaking
+                ? "size-24 animate-pulse opacity-70"
+                : "size-20 animate-pulse opacity-50"
           }`}
         />
         <span
           aria-hidden
-          className={`relative grid size-12 place-items-center rounded-full transition-colors duration-200 ease-out ${
-            !connected
-              ? "bg-ink-faint"
-              : speaking
-                ? "bg-accent"
-                : "bg-surface-invert"
-          }`}
-        >
-          <IconMic className="size-5 text-ink-invert" />
-        </span>
+          style={{ background: sphere, animationDelay: "0ms" }}
+          className={`absolute -translate-y-2.5 rounded-pill blur-[6px] transition-all duration-500 ease-out ${blobState}`}
+        />
+        <span
+          aria-hidden
+          style={{ background: sphere, animationDelay: "1400ms" }}
+          className={`absolute -translate-x-2.5 translate-y-1.5 scale-110 rounded-pill blur-[6px] transition-all duration-500 ease-out ${blobState}`}
+        />
+        <span
+          aria-hidden
+          style={{ background: sphere, animationDelay: "700ms" }}
+          className={`absolute translate-x-2.5 translate-y-1.5 scale-90 rounded-pill blur-[6px] transition-all duration-500 ease-out ${blobState}`}
+        />
       </div>
+      {connected && !speaking ? (
+        <div className="flex gap-1.5">
+          {[0, 1, 2, 3, 4, 5].map((i) => (
+            <span
+              key={i}
+              aria-hidden
+              style={{ animationDelay: `${i * 100}ms` }}
+              className="size-1.5 animate-pulse rounded-pill bg-ink-faint"
+            />
+          ))}
+        </div>
+      ) : null}
       <p aria-live="polite" className="font-display text-sm text-ink-muted">
         {voiceStatusLabel(status, mode, language)}
       </p>
@@ -839,7 +877,7 @@ function CitationChips({ sources }: { sources: Source[] }) {
             href={`https://www.gov.uk/${s.anchor}`}
             target="_blank"
             rel="noreferrer"
-            className="flex min-h-11 items-center justify-between gap-3 rounded-tactile border border-rule bg-surface-raised px-3.5 text-base text-ink-muted transition-colors duration-150 ease-out hover:border-accent hover:text-accent active:bg-surface-sunken"
+            className="flex min-h-11 items-center justify-between gap-3 rounded-tactile bg-mist px-3.5 text-base text-ink-muted transition-colors duration-150 ease-out hover:text-accent active:bg-surface-sunken"
           >
             <span>GOV.UK — {s.label}</span>
             <IconExternal className="size-4 shrink-0 text-ink-faint" />
@@ -866,7 +904,7 @@ function ActionCard({
       <p className="font-display text-[0.7rem] uppercase tracking-[0.16em] text-ink-faint">
         What you need to do
       </p>
-      <div className="mt-3 rounded-tactile border border-rule bg-surface-raised p-4">
+      <div className="mt-3 rounded-card bg-mist p-4 shadow-card">
         <h2 className="font-display text-lg font-semibold tracking-tight text-ink">
           {error.line_label}
         </h2>
@@ -917,6 +955,14 @@ async function fetchSignedUrl(): Promise<string> {
 function readTarget(parameters: Record<string, unknown>): string | null {
   const target = parameters["target"];
   return typeof target === "string" ? target : null;
+}
+
+// The agent should pass "cy", but accept the language's other spellings so an
+// off-script value from the model still triggers the Welsh beat.
+function targetIsWelsh(target: string | null): boolean {
+  if (target === null) return false;
+  const t = target.trim().toLowerCase();
+  return t.startsWith("cy") || t.includes("welsh") || t.includes("cymraeg");
 }
 
 function voiceStatusLabel(
@@ -971,6 +1017,23 @@ function IconChevron({ className }: IconProps) {
       strokeLinejoin="round"
     >
       <path d="m6 3.5 5 4.5-5 4.5" />
+    </svg>
+  );
+}
+
+function IconChat({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden
+      className={className ?? "size-4"}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M3 4.5A1.5 1.5 0 0 1 4.5 3h7A1.5 1.5 0 0 1 13 4.5v4A1.5 1.5 0 0 1 11.5 10H6l-3 2.5V4.5Z" />
     </svg>
   );
 }
