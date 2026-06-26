@@ -4,9 +4,10 @@ import Link from "next/link";
 import logo from "@/app/logo.png";
 
 // Screen 11 — the citizen home (§2). Hard-coded, persists nothing, no auth, no
-// fetch. The two affordances are the only entry points: there is no in-app
-// scanner (Screen 1 is binned), so "Scan a letter" opens the scannable physical
-// letter, and "Continue" re-opens a recent letter fresh (sessions are ephemeral).
+// fetch. "Scan a letter" opens the letter facsimile (with its clickable QR) and
+// "Continue" re-opens a recent letter fresh (sessions are ephemeral). The
+// "Language" row below is a demo affordance only — this build has no settings
+// store to write to.
 const actions = [
   {
     href: "/letters/maria-p2/preview",
@@ -35,7 +36,7 @@ export default function HomePage() {
       </header>
 
       <div className="flex flex-1 flex-col pt-10">
-        <h1 className="font-display text-4xl font-bold tracking-tight">
+        <h1 className="font-display text-3xl font-bold tracking-tight">
           Good morning.
         </h1>
         <p className="mt-3 text-lg text-ink-muted">How can I help today?</p>
@@ -102,6 +103,48 @@ export default function HomePage() {
             );
           })}
         </nav>
+
+        <button
+          type="button"
+          className="mt-3 flex items-center justify-between gap-4 rounded-card bg-mist px-5 py-3.5 text-left transition duration-150 ease-out hover:bg-lavender focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:opacity-70"
+        >
+          <span className="flex items-center gap-3">
+            <span aria-hidden className="shrink-0 text-ink-muted">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={1.75}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="size-5"
+              >
+                <circle cx="12" cy="12" r="9" />
+                <path d="M3 12h18" />
+                <ellipse cx="12" cy="12" rx="4" ry="9" />
+              </svg>
+            </span>
+            <span className="font-display text-base font-medium text-ink">
+              Language
+            </span>
+          </span>
+          <span className="flex items-center gap-2">
+            <span className="text-base text-ink-muted">English</span>
+            <span aria-hidden className="shrink-0 text-ink-faint">
+              <svg
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth={2}
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                className="size-5"
+              >
+                <path d="m9 6 6 6-6 6" />
+              </svg>
+            </span>
+          </span>
+        </button>
       </div>
 
       <footer className="shrink-0 py-6">

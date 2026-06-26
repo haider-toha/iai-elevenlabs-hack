@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+import { BackButton } from "@/components/back-button";
 import { SaveChatStub } from "./save-chat-stub";
 
 // Screen 10 — the editorial success screen (§2). Reached from the GOV.UK
@@ -9,6 +10,10 @@ import { SaveChatStub } from "./save-chat-stub";
 export default function AllSetPage() {
   return (
     <main className="flex min-h-0 flex-1 flex-col px-6">
+      {/* -ml-2.5 aligns the chevron ink with the page's px-6 content edge. */}
+      <div className="-ml-2.5 pt-4">
+        <BackButton href="/" />
+      </div>
       <div className="flex flex-1 flex-col justify-center">
         <div className="flex size-16 shrink-0 items-center justify-center self-center rounded-pill bg-accent">
           <svg
@@ -25,7 +30,7 @@ export default function AllSetPage() {
           </svg>
         </div>
 
-        <h1 className="mt-8 text-center font-display text-5xl tracking-tight">
+        <h1 className="mt-8 text-center font-display text-4xl tracking-tight">
           You&rsquo;re all set.
         </h1>
         <p className="mx-auto mt-4 max-w-[34ch] text-center text-lg text-ink-muted">

@@ -63,7 +63,7 @@ function buildP2Block(letter: P2Letter): string {
     ``,
     `Tax-free amount: ${pounds(letter.tax_free_amount)}, giving the tax code ${letter.current_code}. With no deductions the code would be ${letter.standard_code}.`,
     ``,
-    `The sentence the citizen is most likely to find confusing is, verbatim: "${letter.confusing_line}"`,
+    `Background only — do not raise this yourself. If they ask about a particular sentence in the letter, the one people most often find confusing is, verbatim: "${letter.confusing_line}"`,
     ``,
     `Audit result (computed, authoritative — never recompute or invent these figures):`,
     errors,
@@ -107,7 +107,7 @@ function buildP2BlockWelsh(letter: P2Letter): string {
     ``,
     `Swm di-dreth: ${pounds(letter.tax_free_amount)}, sy'n rhoi'r cod treth ${letter.current_code}. Heb unrhyw ddidyniadau byddai'r cod yn ${letter.standard_code}.`,
     ``,
-    `Y frawddeg y mae'r dinesydd fwyaf tebygol o'i chael yn ddryslyd, air am air (yn Saesneg ar y llythyr): "${letter.confusing_line}"`,
+    `Cefndir yn unig — peidiwch â chodi hyn eich hun. Os ydyn nhw'n gofyn am frawddeg benodol yn y llythyr, dyma'r un y mae pobl amlaf yn ei chael yn ddryslyd, air am air (yn Saesneg ar y llythyr): "${letter.confusing_line}"`,
     ``,
     `Canlyniad yr archwiliad (wedi'i gyfrifo, awdurdodol — peidiwch byth ag ailgyfrifo na dyfeisio'r ffigurau hyn):`,
     errors,
@@ -125,7 +125,7 @@ function buildP800BlockWelsh(
     `Canlyniad: ${letter.result} o ${pounds(letter.amount)}.`,
     `Sut i hawlio neu dalu: ${letter.claim_method}.`,
     ``,
-    `Y frawddeg y mae'r dinesydd fwyaf tebygol o'i chael yn ddryslyd, air am air (yn Saesneg ar y llythyr): "${letter.confusing_line}"`,
+    `Cefndir yn unig — peidiwch â chodi hyn eich hun. Os ydyn nhw'n gofyn am frawddeg benodol yn y llythyr, dyma'r un y mae pobl amlaf yn ei chael yn ddryslyd, air am air (yn Saesneg ar y llythyr): "${letter.confusing_line}"`,
   ].join("\n");
 }
 
@@ -138,6 +138,6 @@ function buildP800Block(letter: Extract<Letter, { type: "p800" }>): string {
     `Result: ${letter.result} by ${pounds(letter.amount)}.`,
     `How to claim or pay: ${letter.claim_method}.`,
     ``,
-    `The sentence the citizen is most likely to find confusing is, verbatim: "${letter.confusing_line}"`,
+    `Background only — do not raise this yourself. If they ask about a particular sentence in the letter, the one people most often find confusing is, verbatim: "${letter.confusing_line}"`,
   ].join("\n");
 }

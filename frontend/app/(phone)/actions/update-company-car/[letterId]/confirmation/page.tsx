@@ -1,9 +1,11 @@
 import Link from "next/link";
 
-// The GOV.UK Design System confirmation panel: the green box with the tick that
-// every real GDS "you've sent it" screen uses. The honesty line is verbatim and
-// non-negotiable — judges and any HMRC observer must not be able to misread this
-// prototype as a real change to a tax record.
+// The GOV.UK Design System confirmation screen: the green panel with the heading
+// that every real GDS "you've sent it" page uses, under the brand masthead. The
+// honesty line is verbatim and non-negotiable — judges and any HMRC observer must
+// not be able to misread this prototype as a real change to a tax record. Rendered
+// inside the `.govuk-embed` scope wrapper (actions/layout.tsx) so the GDS styling
+// never leaks into the surrounding iPhone-frame chrome.
 export default async function ConfirmationPage({
   params,
 }: {
@@ -13,30 +15,10 @@ export default async function ConfirmationPage({
 
   return (
     <>
-      <header className="govuk-header" data-module="govuk-header">
-        <div className="govuk-header__container govuk-width-container">
-          <div className="govuk-header__logo">
-            <span className="govuk-header__logotype-text">GOV.UK</span>
-          </div>
-          <div className="govuk-header__content flex items-center justify-between gap-4">
-            <Link
-              href="/"
-              className="govuk-header__link govuk-header__service-name"
-            >
-              HMRC — Personal Tax Account
-            </Link>
-            <Link
-              href="/all-set"
-              aria-label="Close"
-              className="govuk-header__link inline-flex h-11 w-11 shrink-0 items-center justify-center text-2xl leading-none"
-            >
-              &times;
-            </Link>
-          </div>
-        </div>
-      </header>
+      <GovukMasthead />
+      <GovukServiceBar />
 
-      <div className="govuk-width-container">
+      <div className="govuk-width-container grow">
         <main className="govuk-main-wrapper" id="main-content">
           <div className="govuk-grid-row">
             <div className="govuk-grid-column-two-thirds">
@@ -59,9 +41,13 @@ export default async function ConfirmationPage({
                 the overpayment.
               </p>
 
+              {/* Exit continues to the editorial "You're all set" wrap-up
+                  (/all-set) — the storyboard's success beat (frame 10) — which
+                  then offers the single "Finish" home, rather than dropping the
+                  citizen straight to the dashboard from inside the GDS scope. */}
               <p className="govuk-body">
-                <Link href="/" className="govuk-link">
-                  Return to home
+                <Link href="/all-set" className="govuk-link">
+                  Continue
                 </Link>
               </p>
             </div>
@@ -69,19 +55,69 @@ export default async function ConfirmationPage({
         </main>
       </div>
 
-      <footer className="govuk-footer">
-        <div className="govuk-width-container">
-          <div className="govuk-footer__meta">
-            <div className="govuk-footer__meta-item govuk-footer__meta-item--grow">
-              <span className="govuk-footer__licence-description">
-                This is a prototype. No real change has been made to any tax
-                record. Contains public sector information licensed under the
-                Open Government Licence v3.0.
-              </span>
-            </div>
+      <GovukFooter />
+    </>
+  );
+}
+
+// The GOV.UK brand masthead — crown + wordmark logotype on the brand-blue bar.
+function GovukMasthead() {
+  return (
+    <div className="govuk-header">
+      <div className="govuk-header__container govuk-width-container">
+        <div className="govuk-header__logo">
+          <Link href="/" className="govuk-header__homepage-link">
+            {/* Static SVG asset, not next/image: the GDS crown logotype rasterises
+                identically and needs no optimisation pipeline. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              className="govuk-header__logotype"
+              src="/vendor/govuk-logotype.svg"
+              width={148}
+              height={30}
+              alt="GOV.UK"
+            />
+          </Link>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// The service-information bar that names the service this page belongs to.
+function GovukServiceBar() {
+  return (
+    <section
+      aria-label="Service information"
+      className="govuk-service-navigation"
+    >
+      <div className="govuk-width-container">
+        <div className="govuk-service-navigation__container">
+          <span className="govuk-service-navigation__service-name">
+            <Link href="/" className="govuk-service-navigation__link">
+              HMRC — Personal Tax Account
+            </Link>
+          </span>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function GovukFooter() {
+  return (
+    <footer className="govuk-footer">
+      <div className="govuk-width-container">
+        <div className="govuk-footer__meta">
+          <div className="govuk-footer__meta-item govuk-footer__meta-item--grow">
+            <span className="govuk-footer__licence-description">
+              This is a prototype. No real change has been made to any tax
+              record. Contains public sector information licensed under the Open
+              Government Licence v3.0.
+            </span>
           </div>
         </div>
-      </footer>
-    </>
+      </div>
+    </footer>
   );
 }

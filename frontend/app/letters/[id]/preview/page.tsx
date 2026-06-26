@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 
 import type { P2Letter, P800Letter } from "@/lib/api";
 import { getLetter } from "@/lib/api";
+import { BackButton } from "@/components/back-button";
 import { env } from "@/lib/env";
 import { monthYear, pounds, poundsSigned } from "@/lib/letter-format";
 
@@ -49,6 +50,12 @@ export default async function LetterPreview({
     // surface, not against the app's warm bone chrome.
     <div className="min-h-dvh bg-neutral-100">
       <main className="mx-auto max-w-3xl px-6 py-12 sm:px-10 sm:py-16">
+        {/* Editorial back chevron as page chrome — kept OUTSIDE the white
+            <article> so the HMRC facsimile stays white/black/Arial. -ml-2.5
+            aligns the chevron ink with the article's left edge. */}
+        <div className="-ml-2.5 mb-6">
+          <BackButton href="/" />
+        </div>
         <article
           className="bg-white px-8 py-10 text-black shadow-sm ring-1 ring-neutral-200 sm:px-12 sm:py-12"
           style={{ fontFamily: SANS }}

@@ -4,12 +4,14 @@ import { notFound } from "next/navigation";
 import { getLetter } from "@/lib/api";
 import { AutoFillForm } from "@/components/auto-fill-form";
 
-// This route is a faithful clone of GOV.UK's "Update company car details"
-// service, styled with the GOV.UK Design System on purpose — a different visual
-// language from the rest of the app because it represents a government service.
-// The Server Component fetches the letter and derives the field values; the
+// A faithful clone of GOV.UK's "Update company car details" service, built from
+// the GOV.UK Design System (v6.3.0) — the brand masthead with the crown
+// logotype, the blue service bar, GDS Transport type and the green button. The
+// Server Component fetches the letter and derives the field values; the
 // "use client" leaf animates them being typed in. No useEffect data-fetching:
-// the data is resolved here on the server and handed down as props.
+// the data is resolved here on the server and handed down as props. The page is
+// rendered inside the `.govuk-embed` scope wrapper (actions/layout.tsx), so the
+// GDS styling never leaks into the surrounding iPhone-frame chrome.
 export default async function UpdateCompanyCarPage({
   params,
 }: {
@@ -33,9 +35,16 @@ export default async function UpdateCompanyCarPage({
 
   return (
     <>
-      <GovukHeader />
+      <GovukMasthead />
+      <GovukServiceBar />
 
-      <div className="govuk-width-container">
+      <div className="govuk-width-container grow">
+        {/* Standard GDS back link (not the editorial chevron) — this page is
+            GOV.UK-scoped. It returns to the in-app chat the action was opened
+            from. */}
+        <Link href={`/l/${letterId}`} className="govuk-back-link">
+          Back
+        </Link>
         <main className="govuk-main-wrapper" id="main-content">
           <div className="govuk-grid-row">
             <div className="govuk-grid-column-two-thirds">
@@ -65,25 +74,48 @@ export default async function UpdateCompanyCarPage({
   );
 }
 
-// Crown logo omitted per the Open Government Licence — the black header bar and
-// the service name stand in for it.
-function GovukHeader() {
+// The GOV.UK brand masthead — crown + wordmark logotype on the brand-blue bar.
+// The logotype is the vendored GDS SVG served as a static asset.
+function GovukMasthead() {
   return (
-    <header className="govuk-header" data-module="govuk-header">
+    <div className="govuk-header">
       <div className="govuk-header__container govuk-width-container">
         <div className="govuk-header__logo">
-          <span className="govuk-header__logotype-text">GOV.UK</span>
-        </div>
-        <div className="govuk-header__content">
-          <Link
-            href="/"
-            className="govuk-header__link govuk-header__service-name"
-          >
-            HMRC — Personal Tax Account
+          <Link href="/" className="govuk-header__homepage-link">
+            {/* Static SVG asset, not next/image: the GDS crown logotype rasterises
+                identically and needs no optimisation pipeline. */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              className="govuk-header__logotype"
+              src="/vendor/govuk-logotype.svg"
+              width={148}
+              height={30}
+              alt="GOV.UK"
+            />
           </Link>
         </div>
       </div>
-    </header>
+    </div>
+  );
+}
+
+// The service-information bar that names the service this page belongs to.
+function GovukServiceBar() {
+  return (
+    <section
+      aria-label="Service information"
+      className="govuk-service-navigation"
+    >
+      <div className="govuk-width-container">
+        <div className="govuk-service-navigation__container">
+          <span className="govuk-service-navigation__service-name">
+            <Link href="/" className="govuk-service-navigation__link">
+              HMRC — Personal Tax Account
+            </Link>
+          </span>
+        </div>
+      </div>
+    </section>
   );
 }
 

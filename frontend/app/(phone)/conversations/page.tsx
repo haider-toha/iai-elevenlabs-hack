@@ -1,18 +1,26 @@
 import Link from "next/link";
 
-// Screen 12 — "Your letters" (§2 / §1.8). A hard-coded two-item list bound to
-// the two seeded fixtures, each with its OWN real tax year (note they differ).
-// Persists nothing, no list endpoint, no per-user model.
+import { BackButton } from "@/components/back-button";
+
+// Screen 12 — "Your letters" (§2 / §1.8). The first two rows are the seeded
+// fixtures (each with its OWN real tax year); the third is a demo-only row with
+// no seeded letter, so it parks on "#". Persists nothing, no list endpoint.
 const letters = [
-  { href: "/l/maria-p2", type: "PAYE Coding Notice", taxYear: "2026 to 2027" },
-  { href: "/l/maria-p800", type: "Tax Calculation", taxYear: "2025 to 2026" },
+  { href: "/l/maria-p800", title: "Tax Calculation", date: "28 Apr 2024" },
+  { href: "/l/maria-p2", title: "PAYE Coding Notice", date: "12 Jan 2025" },
+  { href: "#", title: "Self Assessment Confirmation", date: "28 Dec 2024" },
 ];
 
 export default function ConversationsPage() {
   return (
     <main className="flex min-h-0 flex-1 flex-col px-6">
-      <header className="shrink-0 pt-7">
-        <h1 className="font-display text-4xl font-bold tracking-tight">
+      <header className="shrink-0 pt-4">
+        {/* -ml-2.5 optically aligns the chevron ink with the heading below; the
+            size-10 touch target is wider than the glyph it centres. */}
+        <div className="-ml-2.5">
+          <BackButton href="/" />
+        </div>
+        <h1 className="mt-2 font-display text-3xl font-bold tracking-tight">
           Your letters
         </h1>
         <p className="mt-2 text-base text-ink-muted">
@@ -23,7 +31,7 @@ export default function ConversationsPage() {
       <nav className="mt-8 flex flex-col gap-3">
         {letters.map((letter) => (
           <Link
-            key={letter.href}
+            key={letter.title}
             href={letter.href}
             className="group flex items-center justify-between gap-4 rounded-card bg-white px-5 py-4 shadow-card transition duration-150 ease-out hover:bg-mist focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:opacity-70"
           >
@@ -48,10 +56,10 @@ export default function ConversationsPage() {
               </span>
               <span className="flex flex-col">
                 <span className="font-display text-xl font-semibold tracking-tight text-ink">
-                  {letter.type}
+                  {letter.title}
                 </span>
-                <span className="mt-0.5 text-sm text-ink-muted">
-                  Tax year <span className="tnum">{letter.taxYear}</span>
+                <span className="mt-0.5 text-sm text-ink-muted tnum">
+                  {letter.date}
                 </span>
               </span>
             </span>
@@ -73,6 +81,31 @@ export default function ConversationsPage() {
             </span>
           </Link>
         ))}
+
+        <Link
+          href="#"
+          className="group flex items-center justify-between gap-4 rounded-card bg-mist px-5 py-3.5 transition duration-150 ease-out hover:bg-lavender focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent active:opacity-70"
+        >
+          <span className="font-display text-base font-medium text-ink">
+            View all conversations
+          </span>
+          <span
+            aria-hidden
+            className="shrink-0 text-ink-faint transition-transform duration-150 ease-out group-hover:translate-x-0.5"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              className="size-5"
+            >
+              <path d="m9 6 6 6-6 6" />
+            </svg>
+          </span>
+        </Link>
       </nav>
     </main>
   );

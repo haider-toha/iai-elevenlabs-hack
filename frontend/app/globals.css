@@ -55,6 +55,13 @@
   /* Shadow — subtle, navy-tinted (mockup cards are shadow-defined, not ruled) */
   --shadow-card:
     0 1px 2px 0 rgb(13 27 61 / 0.04), 0 6px 20px -4px rgb(13 27 61 / 0.08);
+
+  /* Device chrome — the desktop iPhone demo frame + the camera-scan screen.
+     These are demo CHROME, not app UI; they exist so screens never carry raw hex.
+     `bezel` = the iPhone body + notch/home-indicator; `camera` = the dark
+     viewfinder surface of the Scan screen (frame 1). */
+  --color-bezel: #1c1c1e;
+  --color-camera: #11151c;
 }
 
 @layer base {
@@ -89,6 +96,17 @@
     background-color: var(--color-accent-soft);
     color: var(--color-ink);
   }
+}
+
+/* The GOV.UK clone (`.govuk-embed`) lives inside the ≤390px phone frame, but GDS
+   sizes its type and grid off viewport-width media queries — which, in the Mac
+   demo, read the wide desktop window and render everything at the oversized
+   desktop scale. The scoped GDS sheet rewrites those breakpoints as `@container`
+   queries; this makes `.govuk-embed` the query container so they measure the
+   frame, matching a real phone. inline-size only: width is constrained, height
+   still grows with content. */
+.govuk-embed {
+  container-type: inline-size;
 }
 
 /* Tabular figures without a monospace font */
