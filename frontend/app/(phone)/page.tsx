@@ -38,7 +38,7 @@ export default function HomePage() {
 
       <div className="flex flex-1 flex-col pt-10">
         <h1 className="font-display text-3xl font-bold tracking-tight">
-          Good morning.
+          Good afternoon.
         </h1>
         <p className="mt-3 text-lg text-ink-muted">How can I help today?</p>
 
