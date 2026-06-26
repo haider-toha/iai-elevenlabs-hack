@@ -91,10 +91,16 @@ const READING_STEPS = [
   "Preparing your summary",
 ];
 
-const WELSH_FIRST_MESSAGE =
-  "Helo, fy enw i yw Marginalia. Beth hoffech chi ei wybod am eich llythyr?";
 const ENGLISH_FIRST_MESSAGE =
   "Hi, I'm Marginalia. What would you like to know about your letter?";
+// On a language switch we keep the prior transcript and inject it into the new
+// session's prompt as "Conversation so far". The firstMessage is therefore a
+// short continuation beat, not a re-greeting — the agent picks up from where
+// the conversation left off in the new language.
+const WELSH_CONTINUATION_MESSAGE =
+  "Iawn, byddaf yn parhau yn Gymraeg o nawr. Beth arall hoffech chi ei wybod?";
+const ENGLISH_CONTINUATION_MESSAGE =
+  "Of course, I'll carry on in English from now on. Is there anything else you'd like to understand?";
 
 // A growing per-character timeline: for each char of the agent's current
 // response, the absolute wall-clock time (performance.now() ms) at which it
@@ -341,34 +347,57 @@ function ConvaiSession({
     }
   }
 
-  // A clean session restart (ElevenLabs can't hot-swap voice), with the Welsh
-  // letter block, the native Welsh voice, and language "cy".
-  async function restartInWelsh() {
+  // A clean session restart (ElevenLabs can't hot-swap voice/language). The
+  // prior transcript is preserved in React AND injected into the new session's
+  // prompt as a "Conversation so far" block, so the agent carries the context
+  // across the switch instead of re-introducing itself from scratch.
+  async function restartInLanguage(target: Language) {
     setError(null);
     try {
       endSession();
       const signedUrl = await fetchSignedUrl();
-      setLanguage("cy");
+      setLanguage(target);
       // The reconnect beat (§4.9): a one-time, explicit transcript boundary so
       // the switch reads as a deliberate handover, not a dropped/duplicated turn.
-      // It sits between the English turns above and the Welsh ones the restarted
-      // session will append below.
-      setTranscript((t) => [
-        ...t,
-        { role: "system", text: "Switching to Welsh" },
-      ]);
+      const switchLabel =
+        target === "cy" ? "Switching to Welsh" : "Switching to English";
+      setTranscript((t) => [...t, { role: "system", text: switchLabel }]);
+
+      // Carry the prior conversation into the new session's system prompt so
+      // the agent remembers what's already been discussed. System dividers are
+      // a presentation-only beat (the switch line itself) and are not turns.
+      const historyLines = transcript
+        .filter((t) => t.role !== "system")
+        .map(
+          (t) => `${t.role === "user" ? "User" : "Marginalia"}: ${t.text}`,
+        );
+      const historyBlock =
+        historyLines.length === 0
+          ? ""
+          : `\n\nConversation so far (continue from this point, do not re-introduce yourself):\n${historyLines.join("\n")}`;
+
+      const block = target === "cy" ? letterBlockWelsh : letterBlock;
+      const firstMessage =
+        target === "cy"
+          ? WELSH_CONTINUATION_MESSAGE
+          : ENGLISH_CONTINUATION_MESSAGE;
+      const voiceId =
+        target === "cy"
+          ? env.NEXT_PUBLIC_XI_VOICE_ID_WELSH
+          : env.NEXT_PUBLIC_XI_VOICE_ID_ENGLISH;
+
       startSession({
         signedUrl,
         overrides: {
           agent: {
             // Same persona + concision rules as English (they are language-
             // agnostic); only the letter data is translated. Without this the
-            // Welsh session would inherit no rules and ramble (§Task B).
-            prompt: { prompt: `${systemPrompt}\n\n${letterBlockWelsh}` },
-            language: "cy",
-            firstMessage: WELSH_FIRST_MESSAGE,
+            // restarted session would inherit no rules and ramble (§Task B).
+            prompt: { prompt: `${systemPrompt}\n\n${block}${historyBlock}` },
+            language: target,
+            firstMessage,
           },
-          tts: { voiceId: env.NEXT_PUBLIC_XI_VOICE_ID_WELSH },
+          tts: { voiceId },
         },
       });
     } catch (e) {
@@ -376,11 +405,14 @@ function ConvaiSession({
     }
   }
 
-  // The Welsh beat: the agent calls the `switch_language` client tool (param
-  // `target`, e.g. "cy"). v1.8.0 registers client tools with the provider; the
-  // handler reflects the latest closure, so it can call restartInWelsh above.
+  // The language-switch beat: the agent calls the `switch_language` client tool
+  // (param `target`, e.g. "cy" or "en"). v1.8.0 registers client tools with the
+  // provider; the handler reflects the latest closure, so it can call
+  // restartInLanguage above.
   useConversationClientTool<ConvaiTools>("switch_language", (params) => {
-    if (targetIsWelsh(readTarget(params))) void restartInWelsh();
+    const target = readTarget(params);
+    if (targetIsWelsh(target)) void restartInLanguage("cy");
+    else if (targetIsEnglish(target)) void restartInLanguage("en");
   });
 
   // The sacred start chain (§1.5): getUserMedia → fetchSignedUrl → startSession
@@ -402,11 +434,18 @@ function ConvaiSession({
     setPhase("summary");
   }
 
-  // The GOV.UK overlay is a pure in-session layer over the live chat: the
-  // provider AND the session stay alive, so closing it ("Back to chat") returns
-  // to the exact conversation — same transcript, still connected to continue.
+  // Opening the GOV.UK action hands the user off to the official form, so the
+  // voice session ends here — the mic, WebSocket and wake-lock all release the
+  // moment they tap "Fix this". The provider stays mounted; closing the overlay
+  // returns to the letter summary rather than a dead transcript with a hot mic.
   function openGovukAction() {
+    endSession();
     setActionOverlayOpen(true);
+  }
+
+  function closeGovukAction() {
+    setActionOverlayOpen(false);
+    setPhase("summary");
   }
 
   // Send a question through the shared session, or queue it when the socket isn't
@@ -575,7 +614,7 @@ function ConvaiSession({
               recipientName={
                 letter.type === "p2" ? letter.recipient_name : "the taxpayer"
               }
-              onClose={() => setActionOverlayOpen(false)}
+              onClose={closeGovukAction}
             />
           ) : null}
         </>
@@ -1210,6 +1249,14 @@ function targetIsWelsh(target: string | null): boolean {
   if (target === null) return false;
   const t = target.trim().toLowerCase();
   return t.startsWith("cy") || t.includes("welsh") || t.includes("cymraeg");
+}
+
+// Mirror of targetIsWelsh for the switch-back-to-English path. "en" / "english"
+// covers the prompt's canonical value and the most common off-script phrasings.
+function targetIsEnglish(target: string | null): boolean {
+  if (target === null) return false;
+  const t = target.trim().toLowerCase();
+  return t.startsWith("en") || t.includes("english");
 }
 
 function voiceStatusLabel(

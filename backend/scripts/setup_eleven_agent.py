@@ -210,8 +210,9 @@ def desired_config(
         },
         "asr": {"keywords": STT_KEYTERMS},
         # Welsh registered as a switchable language — valid now the model is
-        # v3_conversational. The Welsh beat (convai-leaf restartInWelsh) overrides
-        # language -> "cy" and this voice at session start.
+        # v3_conversational. The language beat (convai-leaf restartInLanguage)
+        # overrides language -> "cy" / "en" and the matching voice at session
+        # start, carrying the prior transcript into the new session's prompt.
         "language_presets": {
             "cy": {
                 "overrides": {
