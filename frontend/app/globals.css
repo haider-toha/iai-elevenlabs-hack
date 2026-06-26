@@ -1,9 +1,11 @@
 @import "tailwindcss";
 
 @theme inline {
-  /* Fonts — one neo-grotesque for display AND body (Hanken Grotesk) */
+  /* Fonts — Hanken Grotesk for display AND body; Newsreader italic for the
+     editorial "proof mark" voice (standfirsts, colophons). */
   --font-display: var(--font-hanken), "Helvetica Neue", sans-serif;
   --font-body: var(--font-hanken), "Helvetica Neue", sans-serif;
+  --font-serif: var(--font-newsreader), Georgia, "Times New Roman", serif;
 
   /* Brand primitives */
   --color-navy: #0d1b3d;

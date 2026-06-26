@@ -21,7 +21,6 @@ import { pounds, poundsSigned } from "@/lib/letter-format";
 // "system" is a non-spoken boundary marker (e.g. the one-time Welsh switch beat),
 // rendered as a centred divider rather than a bubble — it is not a conversation turn.
 type Turn = { role: "user" | "agent" | "system"; text: string };
-type Source = { label: string; anchor: string };
 type Language = "en" | "cy";
 
 // The three internal view-states of the one /l/[id] route (§1.2). The provider +
@@ -65,9 +64,9 @@ const READING_STEPS = [
 ];
 
 const WELSH_FIRST_MESSAGE =
-  "Helo, gallaf weld bod gennych hysbysiad cod treth gan CThEM. Beth hoffech chi ei wybod?";
+  "Helo, fy enw i yw Marginalia. Beth hoffech chi ei wybod am eich llythyr?";
 const ENGLISH_FIRST_MESSAGE =
-  "Hi, I can see you've got a tax code notice from HMRC. Which language would you like to continue in?";
+  "Hi, I'm Marginalia. What would you like to know about your letter?";
 
 // A growing per-character timeline: for each char of the agent's current
 // response, the absolute wall-clock time (performance.now() ms) at which it
@@ -101,6 +100,7 @@ function ConvaiSession({ letter, letterBlock, letterBlockWelsh }: LeafProps) {
   const [language, setLanguage] = useState<Language>("en");
   const [error, setError] = useState<string | null>(null);
   const [agentHasReplied, setAgentHasReplied] = useState(false);
+  const [agentThinking, setAgentThinking] = useState(false);
   const [draft, setDraft] = useState("");
 
   // Absolute spoken-at timestamps per char of the *current* agent response.
@@ -114,15 +114,10 @@ function ConvaiSession({ letter, letterBlock, letterBlockWelsh }: LeafProps) {
   const focusInputOnEnter = useRef(false);
 
   // Derived from the typed letter, exhaustive over the P2 | P800 union — P800
-  // has neither lines nor suspected errors, so both collapse to [] (the action
-  // card + citations simply never show for it; no crash).
+  // has no suspected errors, so the action card simply never shows for it.
   const letterId = letter.id;
   const suspectedErrors: SuspectedError[] =
     letter.type === "p2" ? letter.suspected_errors : [];
-  const sources: Source[] =
-    letter.type === "p2"
-      ? letter.lines.map((l) => ({ label: l.label, anchor: l.govuk_anchor }))
-      : [];
 
   // v1.8.0's convenience hook: it both reads status / exposes the session
   // controls AND registers these callbacks with the provider via a latest-
@@ -148,12 +143,14 @@ function ConvaiSession({ letter, letterBlock, letterBlockWelsh }: LeafProps) {
           setAgentLive("");
           setRevealedCount(0);
           timeline.current = { spokenAtMs: [] };
+          setAgentThinking(true);
         } else if (part.type === "delta") {
           setAgentLive((s) => s + part.text);
         } else if (part.type === "stop") {
           setAgentLive("");
           setRevealedCount(0);
           timeline.current = { spokenAtMs: [] };
+          setAgentThinking(false);
         }
       },
       onAudioAlignment: (a) => {
@@ -176,6 +173,7 @@ function ConvaiSession({ letter, letterBlock, letterBlockWelsh }: LeafProps) {
         if (status === "disconnected") {
           setAgentLive("");
           setRevealedCount(0);
+          setAgentThinking(false);
           timeline.current = { spokenAtMs: [] };
         }
       },
@@ -328,7 +326,15 @@ function ConvaiSession({ letter, letterBlock, letterBlockWelsh }: LeafProps) {
 
   const hasUserTurn = transcript.some((t) => t.role === "user");
   const showPrompts = live && !hasUserTurn;
-  const showActionCard = suspectedErrors.length > 0 && agentHasReplied;
+  // The action card appears once the user has asked what to do and the agent has
+  // answered that turn — a hardcoded, deterministic surfaced action, not gated
+  // on every agent reply (so it doesn't appear after the opening greeting).
+  const askedWhatToDo = transcript.some(
+    (t) =>
+      t.role === "user" &&
+      t.text.toLowerCase().includes("what do i need to do"),
+  );
+  const showActionCard = suspectedErrors.length > 0 && askedWhatToDo && agentHasReplied;
   const topError = suspectedErrors[0];
 
   return (
@@ -343,6 +349,7 @@ function ConvaiSession({ letter, letterBlock, letterBlockWelsh }: LeafProps) {
         />
       ) : (
         <>
+          <ConversationHeader language={language} />
           <div
             ref={scrollRef}
             className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-4 py-4"
@@ -370,11 +377,8 @@ function ConvaiSession({ letter, letterBlock, letterBlockWelsh }: LeafProps) {
               items={transcript}
               live={agentLive}
               revealedCount={revealedCount}
+              thinking={agentThinking}
             />
-
-            {agentHasReplied && sources.length > 0 ? (
-              <CitationChips sources={sources} />
-            ) : null}
 
             {showActionCard && topError !== undefined ? (
               <ActionCard error={topError} letterId={letterId} />
@@ -424,6 +428,27 @@ function ConvaiSession({ letter, letterBlock, letterBlockWelsh }: LeafProps) {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+// Screen 4 header — a hamburger menu on the left, a language selector on the
+// right. The menu opens the home route; the language selector reflects the
+// active language and is the same axis the agent switches on via `switch_language`.
+function ConversationHeader({ language }: { language: Language }) {
+  return (
+    <div className="flex shrink-0 items-center justify-between px-4 pt-4 pb-2">
+      <Link
+        href="/"
+        aria-label="Menu"
+        className="grid size-10 place-items-center text-ink-muted transition-opacity duration-150 ease-out active:opacity-60"
+      >
+        <IconMenu className="size-5" />
+      </Link>
+      <span className="flex items-center gap-1 font-display text-sm text-ink-muted">
+        {language === "cy" ? "Cymraeg" : "English"}
+        <IconChevron className="size-3.5 rotate-90" />
+      </span>
     </div>
   );
 }
@@ -484,7 +509,9 @@ function PreparingView() {
 
 // Screen 3 — the findings card + docked dual CTA. Exhaustive over the union:
 // P2 gets its code-line breakdown + the suspected-error proof-mark; P800 gets
-// its refund result + the calculation.
+// its refund result + the calculation. Layout follows the reference storyboard
+// Screen 3: a white document-id card up top, an icon-prefixed key-points list,
+// and clean white cards (border + shadow) instead of tinted slabs.
 function SummaryView({
   letter,
   onChat,
@@ -496,25 +523,51 @@ function SummaryView({
 }) {
   const typeLabel =
     letter.type === "p2" ? "PAYE Coding Notice" : "Tax Calculation";
+  // "2026 to 2027" → "2026 to 2027" kept as printed; the reference uses the
+  // long-form span "6 April … to 5 April …", which we already have via
+  // taxYearSpan in the preview page — but the phone summary uses the short
+  // tax-year form to stay one line.
+  const period = letter.tax_year;
 
   return (
     <>
-      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-5 py-6">
-        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <span className="inline-flex items-center gap-1.5 rounded-tactile bg-lavender px-2 py-1 font-display text-xs font-medium text-ink-muted">
-            <IconCheck className="size-3.5 text-accent" />
-            Recognised
-          </span>
-          <span className="font-display text-xs uppercase tracking-[0.14em] text-ink-faint">
-            {typeLabel} · <span className="tnum">{letter.tax_year}</span>
-          </span>
+      {/* Light-grey canvas so the white cards read as cards-on-a-surface,
+          matching the reference Screen 3. */}
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-mist px-5 py-6">
+        {/* Document identification card — white, hairline border, soft shadow.
+            Plain grey doc icon (no tile), title + period stacked, Recognised
+            pill below the text — the reference layout. */}
+        <div className="rounded-card border border-rule bg-surface p-4 shadow-card">
+          <div className="flex items-start gap-3">
+            <span
+              aria-hidden
+              className="mt-0.5 shrink-0 text-ink-faint"
+            >
+              <IconDoc className="size-6" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-display text-base font-semibold tracking-tight text-ink">
+                {typeLabel}
+              </p>
+              <p className="mt-0.5 text-sm text-ink-muted">
+                <span className="tnum">{period}</span>
+              </p>
+              <span className="mt-2 inline-flex items-center gap-1.5 rounded-tactile bg-lavender px-2 py-1 font-display text-xs font-medium text-navy">
+                <IconCheck className="size-3.5 text-accent" />
+                Recognised
+              </span>
+            </div>
+          </div>
         </div>
 
-        <h1 className="mt-4 font-display text-3xl tracking-tight text-ink">
-          Here&apos;s what we found
+        <h1 className="mt-6 font-display text-3xl font-bold tracking-tight text-ink">
+          Here&apos;s what we found.
         </h1>
-        <p className="mt-1 text-base text-ink-muted">
-          For {letter.recipient_name}
+        {/* Dark navy body text, not muted grey — matches the reference. */}
+        <p className="mt-2 text-base leading-relaxed text-ink">
+          {letter.type === "p2"
+            ? `This sets the tax code your employer will use for the ${letter.tax_year} tax year.`
+            : `This shows how much tax you paid in the ${letter.tax_year} tax year.`}
         </p>
 
         {letter.type === "p2" ? (
@@ -523,10 +576,11 @@ function SummaryView({
           <P800Findings letter={letter} />
         )}
 
-        <p className="mt-8 border-t border-rule pt-4 text-xs leading-relaxed text-ink-faint">
-          This explains your letter — it is not formal tax advice. Contains
-          public sector information licensed under the Open Government Licence
-          v3.0.
+        {/* Colophon: italic serif, low contrast. The OGL clause is licensing
+            metadata, set as a printer's colophon at the foot of the page. */}
+        <p className="mt-8 border-t border-rule pt-4 font-serif text-xs italic leading-relaxed text-ink-faint">
+          This explains your letter, not formal tax advice. Public sector
+          information under the Open Government Licence v3.0.
         </p>
       </div>
 
@@ -539,11 +593,14 @@ function SummaryView({
           <IconMic className="size-5 text-ink-invert" />
           Chat about this letter
         </button>
+        {/* Bordered white button with blue icon + dark blue text — the
+            reference's "Type instead" treatment. */}
         <button
           type="button"
           onClick={onType}
-          className="mt-2.5 flex min-h-11 w-full items-center justify-center rounded-tactile border border-rule bg-surface px-5 font-display text-base font-medium text-ink shadow-card transition-colors duration-150 ease-out active:bg-surface-sunken"
+          className="mt-2.5 flex min-h-11 w-full items-center justify-center gap-2 rounded-tactile border border-rule bg-surface px-5 font-display text-base font-medium text-ink transition-colors duration-150 ease-out active:bg-surface-sunken"
         >
+          <IconKeyboard className="size-4 text-accent" />
           Type instead
         </button>
       </div>
@@ -555,62 +612,98 @@ function P2Findings({ letter }: { letter: P2Letter }) {
   const topError = letter.suspected_errors[0];
   return (
     <div className="mt-6 flex flex-col gap-5">
-      <section>
-        <p className="font-display text-[0.7rem] uppercase tracking-[0.16em] text-ink-faint">
-          How your tax-free amount is worked out
-        </p>
-        <dl className="mt-3 flex flex-col gap-2.5">
-          {letter.lines.map((line, i) => (
-            <div
-              key={`${line.label}-${i}`}
-              className="border-b border-rule pb-2.5"
-            >
-              <div className="flex items-baseline justify-between gap-3">
-                <dt className="font-display text-base font-medium text-ink">
-                  {line.label}
-                </dt>
-                <dd className="tnum shrink-0 text-base text-ink-muted">
-                  {poundsSigned(line.amount)}
-                </dd>
-              </div>
-              <p className="mt-1 text-base leading-relaxed text-ink-muted">
-                {line.plain_english}
-              </p>
-            </div>
-          ))}
-          <div className="flex items-baseline justify-between gap-3 pt-0.5">
-            <dt className="font-display text-base font-semibold text-ink">
-              Tax-free amount
-            </dt>
-            <dd className="tnum shrink-0 font-display text-base font-semibold text-ink">
-              {pounds(letter.tax_free_amount)} · {letter.current_code}
-            </dd>
-          </div>
-        </dl>
-      </section>
+      <KeyPointsList
+        points={letter.lines.map((line) => ({
+          title: line.label,
+          body: line.plain_english,
+          value: poundsSigned(line.amount),
+        }))}
+        total={{
+          label: "Tax-free amount",
+          value: `${pounds(letter.tax_free_amount)} · ${letter.current_code}`,
+        }}
+      />
 
       {topError !== undefined ? (
-        <section className="rounded-card border-l-2 border-accent bg-accent/10 py-3 pl-3 pr-3">
-          <p className="font-display text-[0.7rem] uppercase tracking-[0.16em] text-accent">
-            Worth checking
-          </p>
-          <p className="mt-1.5 text-base leading-relaxed text-ink">
-            {topError.reason}
-          </p>
-          <p className="mt-2 text-base text-ink">
-            You could be overpaying about{" "}
-            <span className="tnum font-display font-semibold">
-              {pounds(topError.est_annual_overpay)} a year
-            </span>{" "}
-            (about{" "}
-            <span className="tnum">
-              {pounds(topError.est_monthly_overpay)} a month
-            </span>
-            ).
-          </p>
-        </section>
+        <WorthChecking error={topError} />
       ) : null}
     </div>
+  );
+}
+
+// The key-points list, after the reference Screen 3: each row is a small accent
+// icon + bold title + one-line plain-English body, separated by hairlines — not
+// a tinted slab. The total is set apart at the bottom with a heavier rule.
+function KeyPointsList({
+  points,
+  total,
+}: {
+  points: { title: string; body: string; value: string }[];
+  total: { label: string; value: string };
+}) {
+  return (
+    <section className="rounded-card border border-rule bg-surface p-2 shadow-card">
+      <ul className="flex flex-col">
+        {points.map((p, i) => (
+          <li
+            key={`${p.title}-${i}`}
+            className="flex items-start gap-3 border-b border-rule px-2.5 py-3 last:border-b-0"
+          >
+            {/* Circular lavender icon tile — the reference uses a round £ icon. */}
+            <span
+              aria-hidden
+              className="mt-0.5 grid size-7 shrink-0 place-items-center rounded-pill bg-lavender text-navy"
+            >
+              <IconPound className="size-4" />
+            </span>
+            <div className="min-w-0 flex-1">
+              {/* Bold dark-ink title AND value, matching the reference. */}
+              <div className="flex items-baseline justify-between gap-3">
+                <p className="font-display text-base font-semibold text-ink">
+                  {p.title}
+                </p>
+                <p className="tnum shrink-0 font-display text-base font-semibold text-ink">
+                  {p.value}
+                </p>
+              </div>
+              <p className="mt-0.5 text-sm leading-relaxed text-ink-muted">
+                {p.body}
+              </p>
+            </div>
+          </li>
+        ))}
+      </ul>
+      {/* Total row — heavier rule above, semibold both sides, same card. */}
+      <div className="flex items-baseline justify-between gap-3 border-t-2 border-rule-strong px-2.5 pt-3">
+        <p className="font-display text-base font-semibold text-ink">
+          {total.label}
+        </p>
+        <p className="tnum shrink-0 font-display text-base font-semibold text-ink">
+          {total.value}
+        </p>
+      </div>
+    </section>
+  );
+}
+
+// "Worth checking" — a clean white card (border + shadow), not a tinted slab.
+// The oxblood figure leads, the reason sits underneath. One strong thing to say.
+function WorthChecking({ error }: { error: SuspectedError }) {
+  return (
+    <section className="rounded-card border border-rule bg-surface p-4 shadow-card">
+      <p className="font-display text-sm font-semibold text-accent">
+        Worth checking
+      </p>
+      <p className="tnum mt-1.5 font-display text-2xl font-bold tracking-tight text-ink">
+        ≈ {pounds(error.est_annual_overpay)}
+        <span className="ml-1 font-display text-sm font-medium text-ink-muted">
+          /yr overpaid
+        </span>
+      </p>
+      <p className="mt-2 text-base leading-relaxed text-ink-muted">
+        {error.reason}
+      </p>
+    </section>
   );
 }
 
@@ -618,42 +711,28 @@ function P800Findings({ letter }: { letter: P800Letter }) {
   const refund = letter.result === "overpaid";
   return (
     <div className="mt-6 flex flex-col gap-5">
-      <section className="rounded-card border-l-2 border-accent bg-accent/10 py-3 pl-3 pr-3">
-        <p className="font-display text-[0.7rem] uppercase tracking-[0.16em] text-accent">
+      <section className="rounded-card border border-rule bg-surface p-4 shadow-card">
+        <p className="font-display text-sm font-semibold text-accent">
           {refund ? "Refund due" : "Amount to pay"}
         </p>
-        <p className="tnum mt-1 font-display text-3xl font-semibold text-ink">
+        <p className="tnum mt-1.5 font-display text-3xl font-bold tracking-tight text-ink">
           {pounds(letter.amount)}
         </p>
-        <p className="mt-1.5 text-base leading-relaxed text-ink-muted">
+        <p className="mt-2 text-base leading-relaxed text-ink-muted">
           {refund
             ? `HMRC took more tax than you owed for ${letter.tax_year}, so you're owed this back.`
             : `You paid less tax than you owed for ${letter.tax_year}.`}
         </p>
       </section>
 
-      <section>
-        <p className="font-display text-[0.7rem] uppercase tracking-[0.16em] text-ink-faint">
-          The calculation
-        </p>
-        <dl className="mt-3 flex flex-col gap-2.5 text-base">
-          <SummaryRow
-            label="Total income"
-            value={pounds(letter.total_income)}
-          />
-          <SummaryRow label="Tax due" value={pounds(letter.tax_due)} />
-          <SummaryRow label="Tax paid" value={pounds(letter.tax_paid)} />
-        </dl>
-      </section>
-    </div>
-  );
-}
-
-function SummaryRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-rule pb-2.5">
-      <dt className="text-ink">{label}</dt>
-      <dd className="tnum shrink-0 text-ink-muted">{value}</dd>
+      <KeyPointsList
+        points={[
+          { title: "Total income", body: "What you were paid this year.", value: pounds(letter.total_income) },
+          { title: "Tax due", body: "What HMRC calculates you actually owed.", value: pounds(letter.tax_due) },
+          { title: "Tax paid", body: "What was already taken from your pay.", value: pounds(letter.tax_paid) },
+        ]}
+        total={{ label: "Difference", value: pounds(letter.amount) }}
+      />
     </div>
   );
 }
@@ -666,12 +745,18 @@ function TranscriptBubbles({
   items,
   live,
   revealedCount,
+  thinking,
 }: {
   items: Turn[];
   live: string;
   revealedCount: number;
+  thinking: boolean;
 }) {
   const visible = live.slice(0, Math.min(revealedCount, live.length));
+  // Show the typing indicator only while the agent is thinking AND no audio-
+  // aligned text has appeared yet — once the first character is revealed, the
+  // live bubble takes over and the dots disappear.
+  const showTyping = thinking && visible === "";
   return (
     <div className="flex flex-col gap-3">
       {items.map((turn, i) =>
@@ -683,6 +768,7 @@ function TranscriptBubbles({
           </Bubble>
         ),
       )}
+      {showTyping ? <TypingBubble /> : null}
       {visible !== "" ? (
         <Bubble role="agent">
           {visible}
@@ -694,6 +780,28 @@ function TranscriptBubbles({
         </Bubble>
       ) : null}
     </div>
+  );
+}
+
+// The pre-dictation placeholder: three pulsing dots in a mist bubble, shown
+// between the agent receiving the question and the first audio-aligned word.
+function TypingBubble() {
+  return (
+    <p
+      aria-label="Marginalia is thinking"
+      className="max-w-[85%] self-start rounded-bubble bg-mist px-4 py-3.5 text-base leading-relaxed"
+    >
+      <span className="flex items-center gap-1.5">
+        {[0, 1, 2].map((i) => (
+          <span
+            key={i}
+            aria-hidden
+            style={{ animationDelay: `${i * 160}ms` }}
+            className="size-2 animate-pulse rounded-pill bg-ink-faint"
+          />
+        ))}
+      </span>
+    </p>
   );
 }
 
@@ -854,40 +962,8 @@ function OrbSphere({ connected, speaking }: { connected: boolean; speaking: bool
   );
 }
 
-function CitationChips({ sources }: { sources: Source[] }) {
-  // The SDK does not expose per-message source_attribution on MessagePayload
-  // (verified against @elevenlabs/types). We render citation chips from the
-  // letter's own CodeLine → GOV.UK anchors, which is the authoritative mapping
-  // of each line to the page that explains it.
-  const seen = new Set<string>();
-  const unique = sources.filter((s) =>
-    seen.has(s.anchor) ? false : (seen.add(s.anchor), true),
-  );
-  return (
-    <div className="mt-5 border-t border-rule pt-4">
-      <p className="font-display text-[0.7rem] uppercase tracking-[0.16em] text-ink-faint">
-        Official guidance
-      </p>
-      <div className="mt-2.5 flex flex-col gap-2">
-        {unique.map((s) => (
-          <a
-            key={s.anchor}
-            href={`https://www.gov.uk/${s.anchor}`}
-            target="_blank"
-            rel="noreferrer"
-            className="flex min-h-11 items-center justify-between gap-3 rounded-tactile bg-mist px-3.5 text-base text-ink-muted transition-colors duration-150 ease-out hover:text-accent active:bg-surface-sunken"
-          >
-            <span>GOV.UK — {s.label}</span>
-            <IconExternal className="size-4 shrink-0 text-ink-faint" />
-          </a>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-// Screen 9 — the one real P2 action, gated exactly as before
-// (suspectedErrors.length > 0 && agentHasReplied). Same-window Link into the
+// Screen 9 — the one real P2 action, surfaced after the user asks "what do I
+// need to do" and the agent has answered that turn. Same-window Link into the
 // GOV.UK form — this IS the finish-flow entry (leaving unmounts the session,
 // which is correct). No invented amounts/deadlines: only the audited £/yr · £/mo.
 function ActionCard({
@@ -1002,6 +1078,65 @@ function IconCheck({ className }: IconProps) {
   );
 }
 
+// Document-with-magnifier, after the reference Screen 3 doc-id card.
+function IconDoc({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      aria-hidden
+      className={className ?? "size-5"}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z" />
+      <path d="M14 3v5h5" />
+      <circle cx="11" cy="14" r="2.25" />
+      <path d="m12.6 15.6 1.4 1.4" />
+    </svg>
+  );
+}
+
+// Pound-in-circle for code-line rows.
+function IconPound({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden
+      className={className ?? "size-4"}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="8" cy="8" r="6" />
+      <path d="M9.5 5.2C9 4.9 8.5 4.8 8 4.8c-1.1 0-1.7.7-1.7 1.7 0 .8.3 1.3.8 1.9l1 1.1c.4.5.6.9.6 1.5 0 .9-.5 1.6-1.4 1.6-.4 0-.8-.1-1.1-.4M6 8.3h3.2" />
+    </svg>
+  );
+}
+
+// Keyboard for the "Type instead" text link.
+function IconKeyboard({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden
+      className={className ?? "size-4"}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.5}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <rect x="1.5" y="3.5" width="13" height="9" rx="1.5" />
+      <path d="M4 6.5h.01M6.5 6.5h.01M9 6.5h.01M11.5 6.5h.01M4 9h8" />
+    </svg>
+  );
+}
+
 function IconChevron({ className }: IconProps) {
   return (
     <svg
@@ -1015,6 +1150,22 @@ function IconChevron({ className }: IconProps) {
       strokeLinejoin="round"
     >
       <path d="m6 3.5 5 4.5-5 4.5" />
+    </svg>
+  );
+}
+
+function IconMenu({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden
+      className={className ?? "size-4"}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+    >
+      <path d="M2.5 4h11M2.5 8h11M2.5 12h11" />
     </svg>
   );
 }
@@ -1101,23 +1252,6 @@ function IconMic({ className }: IconProps) {
     >
       <rect x="6" y="2" width="4" height="7" rx="2" />
       <path d="M4 7.5a4 4 0 0 0 8 0M8 11.5V14M6 14h4" />
-    </svg>
-  );
-}
-
-function IconExternal({ className }: IconProps) {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      aria-hidden
-      className={className ?? "size-4"}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.5}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M9 3h4v4M13 3 7 9M11 9.5V12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h2.5" />
     </svg>
   );
 }

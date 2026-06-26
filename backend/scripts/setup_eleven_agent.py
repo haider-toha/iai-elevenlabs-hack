@@ -195,7 +195,7 @@ def desired_config(
                 # 2025-07-23.
                 "tool_ids": [switch_language_tool_id],
             },
-            "first_message": "Hi, I can see you've got a tax code notice from HMRC. Which language would you like to continue in?",
+            "first_message": "Hi, I'm Marginalia. What would you like to know about your letter?",
             "language": "en",
         },
         "tts": {
