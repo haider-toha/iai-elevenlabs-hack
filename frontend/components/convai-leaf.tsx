@@ -684,6 +684,34 @@ function PreparingView() {
   );
 }
 
+// Hardcoded language list for the summary header's globe menu. The full
+// Welsh-switch flow lives in the live conversation (the agent calls the
+// `switch_language` client tool → restartInWelsh). On the summary screen there
+// is no session yet, so this menu is presentation-only: it shows the languages
+// the agent could speak in and marks the default. Selecting any row just
+// closes the menu — nothing is wired to the session, by design.
+//
+// The list is deliberately long so the menu reads as "we support many
+// languages", with a search field to filter it. Flags are inline SVG (no
+// extra assets, no network). Only English + Cymraeg are real in this build;
+// the rest are placeholders for the demo's reach.
+type SummaryLang = {
+  code: string;
+  label: string;
+  flag: "gb" | "cy" | "pl" | "ro" | "tr" | "pt" | "es" | "fr";
+};
+
+const SUMMARY_LANGUAGES: readonly SummaryLang[] = [
+  { code: "en", label: "English", flag: "gb" },
+  { code: "cy", label: "Cymraeg", flag: "cy" },
+  { code: "pl", label: "Polski", flag: "pl" },
+  { code: "ro", label: "Română", flag: "ro" },
+  { code: "tr", label: "Türkçe", flag: "tr" },
+  { code: "pt", label: "Português", flag: "pt" },
+  { code: "es", label: "Español", flag: "es" },
+  { code: "fr", label: "Français", flag: "fr" },
+];
+
 // Screen 3 — the recognised-document card + findings + docked dual CTA, after
 // reference frame 3. A thin top bar carries only Back + the language globe (no
 // title); the letter is named in its own mist card below; the findings are a
@@ -704,12 +732,16 @@ function SummaryView({
   // Short tax-year form (e.g. "2026 to 2027") so the card's second line stays a
   // single row — the reference uses the same compact span.
   const period = letter.tax_year;
+  const [langMenuOpen, setLangMenuOpen] = useState(false);
+  const [langQuery, setLangQuery] = useState("");
 
   return (
     <>
       {/* Thin top bar (reference frame 3): a back chevron to home on the left
-          and the language globe on the right — no title sits in this row. */}
-      <div className="flex shrink-0 items-center justify-between border-b border-rule bg-surface px-2 py-2.5">
+          and the language globe on the right — no title sits in this row. No
+          bottom border: a hairline divider read as a header chrome line the
+          reference doesn't have. */}
+      <div className="relative flex shrink-0 items-center justify-between bg-surface px-2 py-2.5">
         <Link
           href="/"
           aria-label="Back"
@@ -717,19 +749,118 @@ function SummaryView({
         >
           <IconChevron className="size-5 rotate-180" />
         </Link>
-        <span
-          aria-hidden
-          className="grid size-10 place-items-center text-ink-muted"
+        <button
+          type="button"
+          onClick={() => setLangMenuOpen((v) => !v)}
+          aria-label="Change language"
+          aria-expanded={langMenuOpen}
+          className="grid size-10 place-items-center text-ink-muted transition-opacity duration-150 ease-out active:opacity-60"
         >
           <IconGlobe className="size-5" />
-        </span>
+        </button>
+        {langMenuOpen ? (
+          // Click-away backdrop: a full-screen transparent layer behind the
+          // menu that closes it on any outside tap/click. Sits under the menu
+          // (z below it) so menu interactions still hit their own handlers.
+          <button
+            type="button"
+            aria-hidden
+            tabIndex={-1}
+            onClick={() => {
+              setLangMenuOpen(false);
+              setLangQuery("");
+            }}
+            className="fixed inset-0 z-0 cursor-default bg-transparent"
+          />
+        ) : null}
+        {langMenuOpen ? (
+          // Hardcoded, presentation-only menu. Sits absolutely under the globe,
+          // right-aligned to its anchor. A search field filters the list in-
+          // menu; selecting any row just closes it. Nothing writes back to the
+          // session — this is a "we have more languages" affordance, not a
+          // real switcher on this screen.
+          <div
+            role="menu"
+            className="absolute right-2 top-12 z-10 w-64 rounded-card border border-rule bg-surface py-1 shadow-card"
+          >
+            <div className="px-2 pb-1 pt-2">
+              <div className="flex items-center gap-2 rounded-tactile bg-mist px-3 py-2">
+                <IconSearch className="size-4 shrink-0 text-ink-faint" />
+                <input
+                  value={langQuery}
+                  onChange={(e) => setLangQuery(e.target.value)}
+                  placeholder="Search languages"
+                  aria-label="Search languages"
+                  autoComplete="off"
+                  // Stop Enter from submitting any surrounding form / bubbling.
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.preventDefault();
+                  }}
+                  className="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-faint"
+                />
+              </div>
+            </div>
+            <ul className="max-h-64 overflow-y-auto overscroll-contain px-1 pb-1">
+              {(() => {
+                const q = langQuery.trim().toLowerCase();
+                const matches = SUMMARY_LANGUAGES.filter((lang) =>
+                  lang.label.toLowerCase().includes(q),
+                );
+                if (matches.length === 0) {
+                  return (
+                    <li className="px-3 py-2 text-sm text-ink-faint">
+                      No languages match &ldquo;{langQuery}&rdquo;
+                    </li>
+                  );
+                }
+                return matches.map((lang) => (
+                  <li key={lang.code}>
+                    <button
+                      type="button"
+                      role="menuitem"
+                      onClick={() => {
+                        setLangMenuOpen(false);
+                        setLangQuery("");
+                      }}
+                      className="flex w-full items-center gap-3 rounded-tactile px-3 py-2 text-left font-display text-sm text-ink transition-colors duration-150 ease-out hover:bg-mist active:bg-mist"
+                    >
+                      <FlagIcon code={lang.flag} />
+                      <span className="flex-1">{lang.label}</span>
+                      {lang.code === "en" ? (
+                        <span className="text-xs text-ink-faint">Default</span>
+                      ) : null}
+                    </button>
+                  </li>
+                ));
+              })()}
+            </ul>
+            {/* "See more" affordance — presentation only. Implies the list goes
+                beyond the eight hardcoded rows without wiring anything up.
+                Tapping it just dismisses the menu. */}
+            <div className="mt-1 border-t border-rule px-1 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setLangMenuOpen(false);
+                  setLangQuery("");
+                }}
+                className="flex w-full items-center justify-center gap-1.5 rounded-tactile px-3 py-2 font-display text-sm font-medium text-ink-muted transition-colors duration-150 ease-out hover:bg-mist active:bg-mist"
+              >
+                See more languages
+                <IconChevron className="size-3.5 rotate-90" />
+              </button>
+            </div>
+          </div>
+        ) : null}
       </div>
 
       {/* White canvas so the mist document card reads as distinct, matching
           reference frame 3. */}
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain bg-surface px-5 py-5">
-        {/* Recognised-document card: the letter named once — doc glyph, title +
-            period stacked, and the Recognised badge below. */}
+        {/* Recognised-document card: the letter named once — doc glyph plus
+            title + period stacked. The recognised badge was dropped: by this
+            point the document has clearly been read, so the pill only added
+            visual weight without telling the user anything new. */}
         <div className="flex items-start gap-3 rounded-card bg-mist p-4">
           <span aria-hidden className="mt-0.5 shrink-0 text-ink-muted">
             <IconDoc className="size-7" />
@@ -739,10 +870,6 @@ function SummaryView({
               {typeLabel}
             </p>
             <p className="tnum mt-0.5 text-sm text-ink-muted">{period}</p>
-            <span className="mt-2 inline-flex items-center gap-1 rounded-pill bg-lavender px-2.5 py-1 font-display text-xs font-medium text-navy">
-              <IconCheck className="size-3 text-accent" />
-              Recognised
-            </span>
           </div>
         </div>
 
@@ -762,7 +889,7 @@ function SummaryView({
         )}
       </div>
 
-      <div className="shrink-0 border-t border-rule bg-surface px-5 py-4">
+      <div className="shrink-0 bg-surface px-5 py-4">
         <button
           type="button"
           onClick={onChat}
@@ -771,14 +898,16 @@ function SummaryView({
           <IconMic className="size-5 text-ink-invert" />
           Chat about this letter
         </button>
-        {/* Bordered white button with blue icon + dark blue text — the
-            reference's "Type instead" treatment. */}
+        {/* Tertiary text-only affordance: the primary action is "Chat", and a
+            second bordered button at the same width was reading as two equal
+            choices. Stripped to a centred text link with a keyboard glyph so
+            the page resolves to one CTA. */}
         <button
           type="button"
           onClick={onType}
-          className="mt-2.5 flex min-h-11 w-full items-center justify-center gap-2 rounded-tactile border border-rule bg-surface px-5 font-display text-base font-medium text-ink transition-colors duration-150 ease-out active:bg-surface-sunken"
+          className="mt-3 flex min-h-11 w-full items-center justify-center gap-2 px-5 font-display text-base font-medium text-ink-muted transition-opacity duration-150 ease-out hover:text-ink active:opacity-70"
         >
-          <IconKeyboard className="size-4 text-accent" />
+          <IconKeyboard className="size-4 text-ink-muted" />
           Type instead
         </button>
       </div>
@@ -815,12 +944,12 @@ function FindingsList({ rows }: { rows: FindingRow[] }) {
   );
 }
 
-// Three rows derived from the real P2 data: the tax-free amount + code, the
-// company-car deduction that lowers it, and the audited overpayment worth
-// checking. Figures come straight from the letter — never recomputed.
+// Two info rows derived from the real P2 data: the tax-free amount + code, and
+// the company-car deduction that lowers it. The summary is deliberately info,
+// not advice — the "worth checking" overpayment surfaces later, in the live
+// chat's ActionCard, not here. Figures come straight from the letter.
 function P2Findings({ letter }: { letter: P2Letter }) {
   const deduction = letter.lines.find((l) => l.amount < 0);
-  const topError = letter.suspected_errors[0];
 
   const rows: FindingRow[] = [
     {
@@ -832,12 +961,6 @@ function P2Findings({ letter }: { letter: P2Letter }) {
     rows.push({
       icon: "pound",
       text: `HMRC believes you have a company car, which lowers that amount by ${pounds(deduction.amount)}.`,
-    });
-  }
-  if (topError !== undefined) {
-    rows.push({
-      icon: "note",
-      text: `Worth checking: you may be overpaying about ${pounds(topError.est_annual_overpay)} a year, because you told us you no longer have this company car.`,
     });
   }
 
@@ -1530,4 +1653,121 @@ function IconLock({ className }: IconProps) {
       <path d="M5.5 7V5.25a2.5 2.5 0 0 1 5 0V7" />
     </svg>
   );
+}
+
+// Magnifier for the language menu's search field.
+function IconSearch({ className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      aria-hidden
+      className={className ?? "size-4"}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.6}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="7" cy="7" r="4.5" />
+      <path d="m10.5 10.5 3 3" />
+    </svg>
+  );
+}
+
+// Inline flag glyphs for the language menu. 4:3 SVGs, no external assets, no
+// network — keeps the demo self-contained. Each is a simplified national flag
+// rendered with primitive shapes so it reads at 20×15.
+function FlagIcon({ code }: { code: SummaryLang["flag"] }) {
+  const cls = "size-5 shrink-0 overflow-hidden rounded-tactile";
+  switch (code) {
+    case "gb":
+      // Union Jack — blue field with white/red crosses (simplified).
+      return (
+        <svg viewBox="0 0 60 40" aria-hidden className={cls}>
+          <rect width="60" height="40" fill="#012169" />
+          <path d="M0 0 L60 40 M60 0 L0 40" stroke="#fff" strokeWidth="8" />
+          <path d="M0 0 L60 40 M60 0 L0 40" stroke="#C8102E" strokeWidth="3" />
+          <path d="M30 0 V40 M0 20 H60" stroke="#fff" strokeWidth="13" />
+          <path d="M30 0 V40 M0 20 H60" stroke="#C8102E" strokeWidth="7" />
+        </svg>
+      );
+    case "cy":
+      // Welsh Dragon — green-over-white field with a simplified red dragon
+      // mark. A full heraldic dragon is impractical inline; a red glyph on the
+      // white half reads as "Welsh" without faking the actual flag.
+      return (
+        <svg viewBox="0 0 60 40" aria-hidden className={cls}>
+          <rect width="60" height="20" fill="#fff" />
+          <rect y="20" width="60" height="20" fill="#00734C" />
+          <path
+            d="M30 8c-3 0-5 2-5 5 0 2 2 4 5 4s5-2 5-4c0-3-2-5-5-5z"
+            fill="#A5333A"
+          />
+          <path d="M28 17v3M32 17v3" stroke="#A5333A" strokeWidth="1.5" />
+        </svg>
+      );
+    case "pl":
+      // Poland — white over red.
+      return (
+        <svg viewBox="0 0 60 40" aria-hidden className={cls}>
+          <rect width="60" height="20" fill="#fff" />
+          <rect y="20" width="60" height="20" fill="#DC143C" />
+        </svg>
+      );
+    case "ro":
+      // Romania — blue / yellow / red vertical.
+      return (
+        <svg viewBox="0 0 60 40" aria-hidden className={cls}>
+          <rect width="20" height="40" fill="#002B7F" />
+          <rect x="20" width="20" height="40" fill="#FCD116" />
+          <rect x="40" width="20" height="40" fill="#C8102E" />
+        </svg>
+      );
+    case "tr":
+      // Turkey — red field with white crescent + star.
+      return (
+        <svg viewBox="0 0 60 40" aria-hidden className={cls}>
+          <rect width="60" height="40" fill="#E30A17" />
+          <circle cx="22" cy="20" r="8" fill="#fff" />
+          <circle cx="25" cy="20" r="6.5" fill="#E30A17" />
+          <path
+            d="M33 20l5-1.6-3.1 4.3V17.3l3.1 4.3z"
+            fill="#fff"
+          />
+        </svg>
+      );
+    case "pt":
+      // Portugal — green left, red right, yellow armillary ring.
+      return (
+        <svg viewBox="0 0 60 40" aria-hidden className={cls}>
+          <rect width="24" height="40" fill="#006600" />
+          <rect x="24" width="36" height="40" fill="#FF0000" />
+          <circle
+            cx="24"
+            cy="20"
+            r="7"
+            fill="none"
+            stroke="#FFD700"
+            strokeWidth="2"
+          />
+        </svg>
+      );
+    case "es":
+      // Spain — red / yellow / red horizontal.
+      return (
+        <svg viewBox="0 0 60 40" aria-hidden className={cls}>
+          <rect width="60" height="40" fill="#AA151B" />
+          <rect y="10" width="60" height="20" fill="#F1BF00" />
+        </svg>
+      );
+    case "fr":
+      // France — blue / white / red vertical.
+      return (
+        <svg viewBox="0 0 60 40" aria-hidden className={cls}>
+          <rect width="20" height="40" fill="#0055A4" />
+          <rect x="20" width="20" height="40" fill="#fff" />
+          <rect x="40" width="20" height="40" fill="#EF4135" />
+        </svg>
+      );
+  }
 }
