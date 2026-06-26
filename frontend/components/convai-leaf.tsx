@@ -429,9 +429,11 @@ function ConvaiSession({ letter, letterBlock, letterBlockWelsh }: LeafProps) {
 }
 
 // Screen 2 — the reading theatre. The phase auto-advances after ~3s (one
-// setTimeout in ConvaiSession); here we only stage the checklist reveal with a
-// CSS transition cascade (transition-delay + a single mounted flip — no timers,
-// no custom keyframes).
+// setTimeout in ConvaiSession); here we only stage the orb + checklist reveal
+// with a CSS transition cascade (transition-delay + a single mounted flip — no
+// timers, no custom keyframes). The orb is the same morphing sphere used in the
+// live chat (OrbSphere), shown in its "connected / listening" idle state so the
+// loading screen reads as the same entity that answers back.
 function PreparingView() {
   const [revealed, setRevealed] = useState(false);
   useEffect(() => {
@@ -441,11 +443,9 @@ function PreparingView() {
 
   return (
     <div className="flex flex-1 flex-col justify-center gap-8 px-6 py-8">
-      <div>
-        <p className="font-display text-[0.7rem] uppercase tracking-[0.16em] text-ink-faint">
-          Marginalia
-        </p>
-        <h1 className="mt-2 font-display text-2xl tracking-tight text-ink">
+      <div className="flex flex-col items-center gap-6">
+        <OrbSphere connected speaking={false} />
+        <h1 className="font-display text-2xl tracking-tight text-ink">
           Reading your letter
         </h1>
       </div>
@@ -478,18 +478,6 @@ function PreparingView() {
           );
         })}
       </ul>
-
-      <div className="flex items-start gap-3 rounded-card bg-mist px-4 py-3 shadow-card">
-        <IconLock className="mt-0.5 size-4 shrink-0 text-ink-faint" />
-        <div>
-          <p className="font-display text-sm font-medium text-ink">
-            Your data is private
-          </p>
-          <p className="mt-0.5 text-sm leading-relaxed text-ink-muted">
-            We don&apos;t store your letter or your conversation.
-          </p>
-        </div>
-      </div>
     </div>
   );
 }
@@ -794,49 +782,9 @@ function OrbDock({
 }) {
   const connected = status === "connected";
   const speaking = connected && mode === "speaking";
-  // Blue→violet sphere, sanctioned inline hex; the transparent stop sits well
-  // inside the box so the rim feathers out instead of cutting to a hard circle.
-  const sphere =
-    "radial-gradient(circle at 38% 32%, #ffffff 0%, #6e8bf7 24%, #2d51fb 52%, #5b47e0 70%, rgba(235,239,253,0) 92%)";
-  // Three offset, blurred layers share this size/opacity treatment; the morph
-  // comes from their staggered phase + positions, not a concentric throb.
-  const blobState = !connected
-    ? "size-12 opacity-40 saturate-50"
-    : speaking
-      ? "size-[4.5rem] animate-pulse opacity-80 brightness-110"
-      : "size-14 animate-pulse opacity-75";
   return (
     <div className="flex shrink-0 flex-col items-center gap-2 px-5 py-4">
-      <div className="relative grid size-20 place-items-center">
-        <span
-          aria-hidden
-          style={{
-            background: "radial-gradient(circle, #2d51fb 0%, transparent 70%)",
-          }}
-          className={`absolute rounded-pill blur-2xl transition-all duration-500 ease-out ${
-            !connected
-              ? "size-16 opacity-20"
-              : speaking
-                ? "size-24 animate-pulse opacity-70"
-                : "size-20 animate-pulse opacity-50"
-          }`}
-        />
-        <span
-          aria-hidden
-          style={{ background: sphere, animationDelay: "0ms" }}
-          className={`absolute -translate-y-2.5 rounded-pill blur-[6px] transition-all duration-500 ease-out ${blobState}`}
-        />
-        <span
-          aria-hidden
-          style={{ background: sphere, animationDelay: "1400ms" }}
-          className={`absolute -translate-x-2.5 translate-y-1.5 scale-110 rounded-pill blur-[6px] transition-all duration-500 ease-out ${blobState}`}
-        />
-        <span
-          aria-hidden
-          style={{ background: sphere, animationDelay: "700ms" }}
-          className={`absolute translate-x-2.5 translate-y-1.5 scale-90 rounded-pill blur-[6px] transition-all duration-500 ease-out ${blobState}`}
-        />
-      </div>
+      <OrbSphere connected={connected} speaking={speaking} />
       {connected && !speaking ? (
         <div className="flex gap-1.5">
           {[0, 1, 2, 3, 4, 5].map((i) => (
@@ -852,6 +800,56 @@ function OrbDock({
       <p aria-live="polite" className="font-display text-sm text-ink-muted">
         {voiceStatusLabel(status, mode, language)}
       </p>
+    </div>
+  );
+}
+
+// The morphing sphere itself — shared by the live chat (OrbDock) and the
+// reading theatre (PreparingView) so the loading screen reads as the same
+// entity that answers back. Three offset, blurred layers share a size/opacity
+// treatment; the morph comes from their staggered phase + positions, not a
+// concentric throb. `connected` decides whether the sphere is dimmed (idle) or
+// luminous; `speaking` pushes it larger and brighter.
+function OrbSphere({ connected, speaking }: { connected: boolean; speaking: boolean }) {
+  // Blue→violet sphere, sanctioned inline hex; the transparent stop sits well
+  // inside the box so the rim feathers out instead of cutting to a hard circle.
+  const sphere =
+    "radial-gradient(circle at 38% 32%, #ffffff 0%, #6e8bf7 24%, #2d51fb 52%, #5b47e0 70%, rgba(235,239,253,0) 92%)";
+  const blobState = !connected
+    ? "size-12 opacity-40 saturate-50"
+    : speaking
+      ? "size-[4.5rem] animate-pulse opacity-80 brightness-110"
+      : "size-14 animate-pulse opacity-75";
+  return (
+    <div className="relative grid size-20 place-items-center">
+      <span
+        aria-hidden
+        style={{
+          background: "radial-gradient(circle, #2d51fb 0%, transparent 70%)",
+        }}
+        className={`absolute rounded-pill blur-2xl transition-all duration-500 ease-out ${
+          !connected
+            ? "size-16 opacity-20"
+            : speaking
+              ? "size-24 animate-pulse opacity-70"
+              : "size-20 animate-pulse opacity-50"
+        }`}
+      />
+      <span
+        aria-hidden
+        style={{ background: sphere, animationDelay: "0ms" }}
+        className={`absolute -translate-y-2.5 rounded-pill blur-[6px] transition-all duration-500 ease-out ${blobState}`}
+      />
+      <span
+        aria-hidden
+        style={{ background: sphere, animationDelay: "1400ms" }}
+        className={`absolute -translate-x-2.5 translate-y-1.5 scale-110 rounded-pill blur-[6px] transition-all duration-500 ease-out ${blobState}`}
+      />
+      <span
+        aria-hidden
+        style={{ background: sphere, animationDelay: "700ms" }}
+        className={`absolute translate-x-2.5 translate-y-1.5 scale-90 rounded-pill blur-[6px] transition-all duration-500 ease-out ${blobState}`}
+      />
     </div>
   );
 }
@@ -1120,24 +1118,6 @@ function IconExternal({ className }: IconProps) {
       strokeLinejoin="round"
     >
       <path d="M9 3h4v4M13 3 7 9M11 9.5V12a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h2.5" />
-    </svg>
-  );
-}
-
-function IconLock({ className }: IconProps) {
-  return (
-    <svg
-      viewBox="0 0 16 16"
-      aria-hidden
-      className={className ?? "size-4"}
-      fill="none"
-      stroke="currentColor"
-      strokeWidth={1.4}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="3.5" y="7" width="9" height="6.5" rx="1.2" />
-      <path d="M5.5 7V5a2.5 2.5 0 0 1 5 0v2" />
     </svg>
   );
 }

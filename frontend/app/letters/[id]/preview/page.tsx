@@ -22,6 +22,16 @@ const RETURN_ADDRESS = [
   "BX9 1AS",
 ] as const;
 
+// Placeholder citizen address — the recipient block on a real P2 carries the
+// full postal address under the name; we don't store one, so this holds the
+// shape until real address data lands. Welsh-formatted, since the letter can
+// be served in either English or Welsh.
+const RECIPIENT_ADDRESS = [
+  "47 Stryd Fawr",
+  "Caerdydd",
+  "CF10 1AX",
+] as const;
+
 // HMRC PAYE general enquiries line — a fixed published number, not per-letter.
 const HMRC_PHONE = "0300 200 3300";
 
@@ -102,6 +112,11 @@ function LetterMeta({
     <section className="mt-8 grid grid-cols-1 gap-x-10 gap-y-8 sm:grid-cols-2">
       <address className="text-sm not-italic leading-relaxed">
         {recipient}
+        <div className="mt-1">
+          {RECIPIENT_ADDRESS.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
       </address>
 
       <div className="text-sm leading-relaxed">
@@ -111,13 +126,18 @@ function LetterMeta({
             <p key={line}>{line}</p>
           ))}
         </div>
-        {/* Labels bold at a fixed column, values left-aligned at one tab stop,
-            no rules — the scan's detail block. */}
-        <dl className="mt-12 grid grid-cols-[max-content_1fr] gap-x-8 gap-y-3">
+        {/* Labels bold, values left-aligned one line below — the scan's detail
+            block. `whitespace-nowrap` keeps each value intact; `flex-wrap` lets
+            a long label push its value to a second line as a whole unit
+            instead of word-breaking it across the narrow right column. */}
+        <dl className="mt-12 flex flex-col gap-3">
           {details.map((d) => (
-            <div key={d.label} className="contents">
+            <div
+              key={d.label}
+              className="flex flex-wrap items-baseline gap-x-3"
+            >
               <dt className="font-bold">{d.label}</dt>
-              <dd className="tnum">{d.value}</dd>
+              <dd className="tnum whitespace-nowrap">{d.value}</dd>
             </div>
           ))}
         </dl>
@@ -336,8 +356,7 @@ function QrBlock({ id }: { id: string }) {
           />
         </a>
         <p className="mt-2 text-xs leading-snug">
-          Scan with your phone to hear this letter explained in plain English.
-        </p>
+          Scan with your phone to interact with this letter.        </p>
       </div>
     </section>
   );

@@ -1,4 +1,7 @@
+import Image from "next/image";
 import Link from "next/link";
+
+import logo from "@/app/logo.png";
 
 // Screen 11 — the citizen home (§2). Hard-coded, persists nothing, no auth, no
 // fetch. The two affordances are the only entry points: there is no in-app
@@ -11,7 +14,7 @@ const actions = [
     blurb: "I'll explain it simply.",
   },
   {
-    href: "/l/maria-p2",
+    href: "/conversations",
     title: "Continue a previous letter",
     blurb: "Open a recent conversation.",
   },
@@ -20,10 +23,15 @@ const actions = [
 export default function HomePage() {
   return (
     <main className="flex min-h-0 flex-1 flex-col px-6">
-      <header className="shrink-0 pb-3 pt-7">
-        <span className="font-display text-lg font-semibold uppercase tracking-[0.22em] text-ink">
-          Marginalia<span className="text-accent">.</span>
-        </span>
+      <header className="shrink-0 pb-3 pt-8">
+        <Image
+          src={logo}
+          alt=""
+          width={96}
+          height={96}
+          priority
+          className="size-[96px]"
+        />
       </header>
 
       <div className="flex flex-1 flex-col pt-10">
@@ -113,7 +121,7 @@ export default function HomePage() {
             </svg>
           </span>
           <p className="max-w-[42ch] text-sm leading-relaxed text-ink-faint">
-            Your letters stay private. We don&rsquo;t share your letters or
+            Your data stays private. We don&rsquo;t share your letters or
             conversations with anyone.
           </p>
         </div>
