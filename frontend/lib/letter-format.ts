@@ -1,4 +1,4 @@
-import type { Letter, P2Letter } from "@/lib/api";
+import type { Letter, P2Letter } from "@/lib/letters";
 
 // Pounds, no pence on whole amounts, and no thousands separator — HMRC coding
 // notices print whole pounds as a bare run of digits (e.g. "£10600", "£18044").

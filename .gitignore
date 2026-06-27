@@ -6,25 +6,11 @@ frontend/out/
 frontend/build/
 frontend/next-env.d.ts
 frontend/*.tsbuildinfo
-# Vendored from govuk-frontend by scripts/copy-govuk-assets.ts (predev/prebuild)
-frontend/public/vendor/
-
-# Python
-__pycache__/
-*.pyc
-backend/.venv/
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
 
 # Env
 .env
 .env.local
 .env*.local
-
-# Supabase
-supabase/.branches/
-supabase/.temp/
 
 # OS
 .DS_Store

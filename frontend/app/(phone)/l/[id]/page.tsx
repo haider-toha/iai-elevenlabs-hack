@@ -1,22 +1,9 @@
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-
 import { notFound } from "next/navigation";
 
 import { ConvaiLeaf } from "@/components/convai-leaf";
-import { getLetter } from "@/lib/api";
+import { SYSTEM_PROMPT } from "@/lib/letter-explainer-prompt";
+import { getLetter } from "@/lib/letters";
 import { buildLetterBlock, buildLetterBlockWelsh } from "@/lib/letter-format";
-
-// Marginalia's persona + concision rules, read once per server process from the
-// single source of truth shared with the agent bootstrap (setup_eleven_agent.py).
-// The session override REPLACES the agent's base prompt, so this must be carried
-// into the override at session start (see ConvaiLeaf) or the rules never apply at
-// runtime. The dev/start server runs from frontend/, so the repo's backend/ is one
-// level up.
-const SYSTEM_PROMPT = readFileSync(
-  join(process.cwd(), "..", "backend", "prompts", "letter_explainer.txt"),
-  "utf8",
-);
 
 // The QR/cold-open target (§1.1). A thin async Server Component: it fetches the
 // letter, builds the English + Welsh prompt blocks server-side, and hands the
@@ -30,7 +17,7 @@ export default async function ConversationPage({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const letter = await getLetter(id);
+  const letter = getLetter(id);
   if (letter === null) notFound();
 
   // Both blocks are built server-side and handed to the leaf as props: English
