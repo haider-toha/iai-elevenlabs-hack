@@ -4,6 +4,8 @@
 code already printed on a government letter into a thirty-second conversation
 that explains it — in any language — and catches the mistake.
 
+**Live demo:** [marginalia-peach.vercel.app](https://marginalia-peach.vercel.app/)
+
 A single Next.js 16 app (App Router, React, TypeScript, Tailwind v4 — pnpm). The
 two demo letters and the explainer system prompt are inlined; the only server
 runtime is two Next route handlers — `/api/eleven/signed-url` (keeps the
