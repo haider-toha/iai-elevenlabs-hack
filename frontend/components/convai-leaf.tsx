@@ -14,7 +14,12 @@ import {
   useState,
 } from "react";
 
-import type { Letter, P2Letter, P800Letter, SuspectedError } from "@/lib/api";
+import type {
+  Letter,
+  P2Letter,
+  P800Letter,
+  SuspectedError,
+} from "@/lib/letters";
 import { env } from "@/lib/env";
 import { BackButton } from "@/components/back-button";
 import { GovukEmbed } from "@/components/govuk-embed";
@@ -368,9 +373,7 @@ function ConvaiSession({
       // a presentation-only beat (the switch line itself) and are not turns.
       const historyLines = transcript
         .filter((t) => t.role !== "system")
-        .map(
-          (t) => `${t.role === "user" ? "User" : "Marginalia"}: ${t.text}`,
-        );
+        .map((t) => `${t.role === "user" ? "User" : "Marginalia"}: ${t.text}`);
       const historyBlock =
         historyLines.length === 0
           ? ""
@@ -1548,4 +1551,3 @@ function IconLock({ className }: IconProps) {
     </svg>
   );
 }
-

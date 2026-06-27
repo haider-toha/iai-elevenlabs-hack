@@ -1,10 +1,9 @@
 import Image from "next/image";
 import { notFound } from "next/navigation";
 
-import type { P2Letter, P800Letter } from "@/lib/api";
-import { getLetter } from "@/lib/api";
+import type { P2Letter, P800Letter } from "@/lib/letters";
+import { getLetter } from "@/lib/letters";
 import { BackButton } from "@/components/back-button";
-import { env } from "@/lib/env";
 import { monthYear, pounds, poundsSigned } from "@/lib/letter-format";
 
 // This page is a deliberate exception to the app's editorial design system: it
@@ -27,11 +26,7 @@ const RETURN_ADDRESS = [
 // full postal address under the name; we don't store one, so this holds the
 // shape until real address data lands. Welsh-formatted, since the letter can
 // be served in either English or Welsh.
-const RECIPIENT_ADDRESS = [
-  "47 Stryd Fawr",
-  "Caerdydd",
-  "CF10 1AX",
-] as const;
+const RECIPIENT_ADDRESS = ["47 Stryd Fawr", "Caerdydd", "CF10 1AX"] as const;
 
 // HMRC PAYE general enquiries line — a fixed published number, not per-letter.
 const HMRC_PHONE = "0300 200 3300";
@@ -42,7 +37,7 @@ export default async function LetterPreview({
   params: Promise<{ id: string }>;
 }) {
   const { id } = await params;
-  const letter = await getLetter(id);
+  const letter = getLetter(id);
   if (letter === null) notFound();
 
   return (
@@ -352,18 +347,19 @@ function QrBlock({ id }: { id: string }) {
           aria-label="Open this letter on a phone"
           className="inline-block border border-black transition-opacity duration-150 ease-out hover:opacity-80"
         >
-          {/* Plain <img>, not next/image: the QR is served by FastAPI on a
-              different origin and must rasterise identically into the PDF export. */}
+          {/* Plain <img>, not next/image: the QR is served same-origin by the
+              Next qr.png route handler and must rasterise identically into the PDF export. */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={`${env.NEXT_PUBLIC_API_URL}/letters/${id}/qr.png`}
+            src={`/letters/${id}/qr.png`}
             alt="QR code — scan with your phone or click to open"
             width={140}
             height={140}
           />
         </a>
         <p className="mt-2 text-xs leading-snug">
-          Scan with your phone to interact with this letter.        </p>
+          Scan with your phone to interact with this letter.{" "}
+        </p>
       </div>
     </section>
   );

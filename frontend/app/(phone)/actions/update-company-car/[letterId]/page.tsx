@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { getLetter } from "@/lib/api";
+import { getLetter } from "@/lib/letters";
 import { AutoFillForm } from "@/components/auto-fill-form";
 
 // A faithful clone of GOV.UK's "Update company car details" service, built from
@@ -18,7 +18,7 @@ export default async function UpdateCompanyCarPage({
   params: Promise<{ letterId: string }>;
 }) {
   const { letterId } = await params;
-  const letter = await getLetter(letterId);
+  const letter = getLetter(letterId);
   if (!letter) notFound();
   const recipient =
     letter.type === "p2" ? letter.recipient_name : "the taxpayer";
