@@ -1,8 +1,8 @@
 # Marginalia
 
-**The voice in the margin of your government letter.** Marginalia turns the QR
-code already printed on a government letter into a thirty-second conversation
-that explains it in any language.
+Marginalia turns a confusing government letter into a 30 second voice conversation that explains it in plain language.
+
+Instead of acting like a chatbot, it reads directly from the official document so every answer is grounded in the actual letter and Gov UK data. It uses ElevenLabs ConvAI to deliver a natural voice experience that helps users understand what they’ve received and what to do next.
 
 **Live demo:** [marginalia-peach.vercel.app](https://marginalia-peach.vercel.app/)
 
