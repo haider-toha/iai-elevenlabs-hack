@@ -2,7 +2,7 @@
 
 **The voice in the margin of your government letter.** Marginalia turns the QR
 code already printed on a government letter into a thirty-second conversation
-that explains it — in any language — and catches the mistake.
+that explains it in any language.
 
 **Live demo:** [marginalia-peach.vercel.app](https://marginalia-peach.vercel.app/)
 
